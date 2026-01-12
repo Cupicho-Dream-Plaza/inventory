@@ -3,89 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cupicho Pro V2.3</title>
+    <title>CUPICHO Inventory Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-        body { background-color: #020617; color: #f8fafc; -webkit-tap-highlight-color: transparent; }
-        #reader { border: 2px solid #1e293b !important; border-radius: 16px; overflow: hidden; background: #000; min-height: 250px; }
-        .flash-success { animation: flash 0.4s ease-out; }
-        @keyframes flash {
-            0% { box-shadow: inset 0 0 100px rgba(234, 179, 8, 0.6); }
-            100% { box-shadow: inset 0 0 0px transparent; }
-        }
-        .btn-gold { background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); color: #000; font-weight: 900; }
+        body { background-color: #0f172a; color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+        #reader { border: 2px solid #334155 !important; border-radius: 12px; overflow: hidden; background: #000; }
+        .flash-active { animation: flash 0.3s ease-out; }
+        @keyframes flash { 0% { background: rgba(234, 179, 8, 0.5); } 100% { background: transparent; } }
     </style>
 </head>
-<body class="p-4 font-sans max-w-md mx-auto min-h-screen pb-32">
+<body class="p-4 font-sans max-w-md mx-auto min-h-screen">
 
-    <div id="flash-overlay" class="fixed inset-0 pointer-events-none z-50"></div>
-
-    <header class="mb-4 flex justify-between items-end">
+    <header class="mb-4 flex justify-between items-center">
         <div>
-            <h1 class="text-2xl font-black text-yellow-500 italic leading-none">CUPICHO</h1>
-            <p class="text-[10px] text-slate-500 tracking-[0.2em] uppercase">Inventory Expert</p>
+            <h1 class="text-2xl font-black text-yellow-500 italic">CUPICHO</h1>
+            <p class="text-[10px] text-slate-500 tracking-widest uppercase">Stability Version 2.4</p>
         </div>
-        <button id="start-cam-btn" onclick="initScanner()" class="text-[10px] bg-blue-600 px-3 py-1 rounded-full text-white font-bold animate-pulse">重啟相機</button>
+        <button onclick="location.reload()" class="text-xs bg-slate-800 px-3 py-1 rounded border border-slate-700">重新整理</button>
     </header>
 
-    <div id="reader" class="mb-4 shadow-2xl"></div>
+    <div id="cam-status" class="bg-blue-900/30 border border-blue-500/50 text-blue-400 text-[10px] p-2 rounded mb-2 text-center">
+        正在初始化相機系統...
+    </div>
 
-    <section class="bg-slate-900/80 p-5 rounded-2xl border border-slate-800 mb-4 shadow-xl">
-        <div class="text-center mb-4 min-h-[64px] flex flex-col justify-center">
-            <div id="display-name" class="text-xl font-bold text-white tracking-tight">請對準條碼掃描</div>
-            <div id="display-id" class="text-xs text-yellow-600 font-mono mt-1 uppercase tracking-widest leading-relaxed">---</div>
+    <div id="reader" class="mb-4"></div>
+
+    <div class="bg-slate-900 border border-slate-700 p-4 rounded-xl mb-4 shadow-xl">
+        <div class="text-center mb-4">
+            <div id="display-name" class="text-lg font-bold">等待掃描...</div>
+            <div id="display-id" class="text-xs text-yellow-600 font-mono">---</div>
         </div>
-
-        <div class="grid grid-cols-3 gap-2">
-            <div class="col-span-2">
-                <input type="text" id="barcode-input" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-lg text-white focus:border-yellow-500 outline-none transition-all font-mono" placeholder="手動輸入條碼">
-            </div>
-            <input type="number" id="qty-input" value="1" class="bg-slate-950 border border-slate-700 rounded-xl p-4 text-2xl font-black text-center text-yellow-500 outline-none">
-            <button onclick="addEntry()" class="col-span-3 btn-gold py-4 rounded-xl active:scale-[0.98] transition-all shadow-lg shadow-yellow-500/10 text-lg">確認送出</button>
-        </div>
-        
-        <button id="search-trigger" onclick="openSearch()" class="hidden w-full mt-3 py-3 text-xs text-blue-400 border border-blue-500/30 rounded-xl bg-blue-500/5 font-bold uppercase">
-            🔍 找不到商品？從主檔搜尋綁定
-        </button>
-    </section>
-
-    <section>
-        <div class="flex justify-between items-center mb-4 px-1">
-            <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">History Log</h2>
-            <button onclick="exportCSV()" class="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-4 py-2 rounded-lg border border-emerald-500/20">匯出 CSV</button>
-        </div>
-        <div id="inventory-list" class="space-y-2 text-sm"></div>
-    </section>
-
-    <div class="fixed bottom-6 left-4 right-4 max-w-md mx-auto flex gap-2 z-40">
-        <button onclick="clearData()" class="bg-slate-900 border border-slate-800 text-slate-600 px-5 py-4 rounded-2xl text-[10px] font-bold uppercase">Reset</button>
-        <div class="flex-1 bg-slate-900 border border-slate-800 p-4 rounded-2xl flex justify-between items-center px-8">
-            <span class="text-slate-500 font-bold text-xs uppercase font-mono">Counted</span>
-            <span id="total-count" class="text-2xl font-black text-yellow-500">0</span>
+        <div class="flex gap-2">
+            <input type="text" id="barcode-input" class="flex-1 bg-black border border-slate-700 rounded-lg p-3 font-mono" placeholder="條碼">
+            <input type="number" id="qty-input" value="1" class="w-20 bg-black border border-slate-700 rounded-lg p-3 text-center text-yellow-500 font-bold">
+            <button onclick="addEntry()" class="bg-yellow-500 text-black px-4 rounded-lg font-bold active:scale-95 transition-all">新增</button>
         </div>
     </div>
 
-    <div id="search-modal" class="fixed inset-0 bg-slate-950/98 z-[60] hidden flex flex-col p-6 backdrop-blur-md">
-        <div class="flex justify-between items-center mb-6">
-            <h3 class="text-xl font-bold text-white tracking-tight">搜尋庫存資料庫</h3>
-            <button onclick="closeSearch()" class="text-slate-400 text-4xl">&times;</button>
+    <div class="mb-24">
+        <div class="flex justify-between items-center mb-2 px-1 text-xs text-slate-500 font-bold uppercase">
+            <span>Inventory List</span>
+            <button onclick="exportCSV()" class="text-emerald-500">Export CSV</button>
         </div>
-        <input type="text" id="master-search-input" oninput="filterMaster()" class="w-full bg-slate-900 border border-slate-700 rounded-2xl p-5 mb-6 outline-none focus:border-yellow-500 text-white text-lg" placeholder="品名或貨號關鍵字...">
-        <div id="master-results" class="flex-1 overflow-y-auto space-y-3 pb-20"></div>
+        <div id="inventory-list" class="space-y-2"></div>
+    </div>
+
+    <div class="fixed bottom-4 left-4 right-4 max-w-md mx-auto flex gap-2">
+        <button onclick="clearData()" class="bg-slate-800 text-slate-500 px-4 py-4 rounded-xl text-[10px] font-bold">RESET</button>
+        <div class="flex-1 bg-yellow-500 text-black p-4 rounded-xl flex justify-between items-center px-6">
+            <span class="font-bold text-sm">TOTAL</span>
+            <span id="total-count" class="text-2xl font-black">0</span>
+        </div>
     </div>
 
     <script>
-        // --- 核心資料區 ---
-        // 這裡已經自動匯入您 123.xlsx 的所有資料（節選範例，請見下方說明）
+        // 1. 商品資料庫 (請確保這裡的資料與您的 Excel 一致)
         const masterData = [
             {"id":"6205","barcode":"4540624403337","name":"草莓夾心巧克力"},
             {"id":"6226","barcode":"4901330646197","name":"加樂比薯條杯-沙拉口味"},
-            {"id":"6166","barcode":"4901620300914","name":"日清奶油酥餅"},
-            {"id":"6221","barcode":"4901625021333","name":"扇屋點心起司(新)"},
-            {"id":"6142","barcode":"4902555171586","name":"不二家千層派"},
-            {"id":"6177","barcode":"4902720132640","name":"森永彈珠汽水糖"},
-            {"id":"6183","barcode":"4902777002590","name":"明治巧克力"},
-            {"id":"6214","barcode":"4902777010243","name":"明治竹筍造型巧克力"},
-            {"id":"6204","barcode":"4902777026336","name":"明治阿波羅巧克力"},
-            {"id":"6
+            {"id":"6166","barcode":"4901620300914","name":"日清奶油酥餅"}
+            // ... (請將您 Excel 的剩餘內容轉為此格式貼於此)
+        ];
+
+        let inventory = JSON.parse(localStorage.getItem('cupicho_inv')) || [];
+        let html5QrCode;
+
+        // 2. 初始化掃描器 (增加防錯)
+        async function startScanner() {
+            const statusEl = document.getElementById('cam-status');
+            try {
+                html5QrCode = new Html5Qrcode("reader");
+                const config = { fps: 15, qrbox: { width: 250, height: 150 } };
+                
+                await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess);
+                statusEl.innerText = "● 相機運作中";
+                statusEl.className = "bg-emerald-900/30 border border-emerald-500/50 text-emerald-500 text-[10px] p-2 rounded mb-2 text-center";
+            } catch (err) {
+                statusEl.innerText = "錯誤: " + err;
+                statusEl.className = "bg-red-900/30 border border-red-500/50 text-red-500 text-[10px] p-2 rounded mb-2 text-center";
+                console.error("Scanner Error:", err);
+            }
+        }
+
+        function onScanSuccess(text) {
+            // 反饋
+            document.body.classList.add('flash-active');
+            setTimeout(() => document.body.classList.remove('flash-active'), 300);
+            
+            document.getElementById('barcode-input').value = text;
+            const item = masterData.find(m => m.barcode === text);
+            if (item) {
+                document.getElementById('display-name').innerText = item.name;
+                document.getElementById('display-id').innerText = "ID: " + item.id;
+            } else {
+                document.getElementById('display-name').innerText = "未知商品";
+                document.getElementById('display-id').innerText = text;
+            }
+            
+            // 嗶聲
+            const ac = new (window.AudioContext
