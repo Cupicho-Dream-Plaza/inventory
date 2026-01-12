@@ -3,178 +3,253 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CUPICHO DEBUG V3.3</title>
+    <title>CUPICHO PRO V3.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { background-color: #020617; color: #f8fafc; }
-        .modal-view { display: flex !important; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 999; flex-direction: column; padding: 20px; }
-        #debug-console { background: #000; color: #0f0; font-family: monospace; font-size: 10px; padding: 10px; height: 60px; overflow-y: auto; border-top: 1px solid #333; }
+        body { background-color: #020617; color: #f8fafc; -webkit-tap-highlight-color: transparent; }
+        #reader { border: none !important; background: #000; height: 100%; width: 100%; }
+        /* 確保彈窗永遠在最上層 */
+        .modal-view { 
+            display: none; 
+            position: fixed; 
+            inset: 0; 
+            background: rgba(2, 6, 23, 0.98); 
+            backdrop-filter: blur(20px); 
+            z-index: 9999; 
+            flex-direction: column; 
+            padding: 24px; 
+        }
+        .show-modal { display: flex !important; animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(50%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .btn-gold { background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); color: #000; font-weight: 800; }
+        .flash-active { animation: flash 0.3s ease-out; }
+        @keyframes flash { 0% { background: rgba(234, 179, 8, 0.4); } 100% { background: transparent; } }
     </style>
 </head>
-<body class="p-4 font-sans max-w-md mx-auto min-h-screen pb-32">
+<body class="max-w-md mx-auto min-h-screen flex flex-col">
 
-    <header class="mb-4 flex justify-between items-center">
-        <h1 class="text-2xl font-black text-yellow-500 italic">CUPICHO</h1>
-        <button id="admin-btn" class="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold border border-slate-700">⚙️ 管理主檔</button>
+    <div id="flash-overlay" class="fixed inset-0 pointer-events-none z-[1100]"></div>
+
+    <header class="p-4 flex justify-between items-center bg-slate-950/80 border-b border-slate-900 sticky top-0 z-[100]">
+        <div>
+            <h1 class="text-xl font-black text-yellow-500 italic leading-none">CUPICHO</h1>
+            <p class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Inventory v3.6</p>
+        </div>
+        <button onclick="openAdmin()" class="bg-slate-900 text-yellow-500 px-3 py-2 rounded-xl border border-slate-800 text-xs font-bold">⚙️ 管理</button>
     </header>
 
-    <div id="reader-wrapper" class="relative bg-slate-900 rounded-2xl overflow-hidden mb-4 border border-slate-800" style="min-height: 250px;">
+    <section class="relative w-full aspect-square bg-black overflow-hidden border-b border-slate-900">
         <div id="reader"></div>
-        <div id="placeholder" class="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
-            <button id="start-btn" class="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black shadow-2xl">📷 啟動相機</button>
+        <div id="cam-gate" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950">
+            <button onclick="initScanner()" class="bg-yellow-500 text-black px-10 py-4 rounded-2xl font-black text-lg shadow-xl active:scale-95">
+                📷 啟動相機
+            </button>
+        </div>
+        <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div class="w-64 h-40 border-2 border-yellow-500/30 rounded-2xl relative">
+                <div class="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-yellow-500"></div>
+                <div class="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-yellow-500"></div>
+                <div class="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-yellow-500"></div>
+                <div class="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-yellow-500"></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="p-4 -mt-8 relative z-30">
+        <div class="bg-slate-900 border border-slate-800 rounded-[32px] p-6 shadow-2xl">
+            <div class="text-center mb-6 border-b border-slate-800 pb-4">
+                <div id="display-name" class="text-xl font-bold text-white mb-1">等待掃描</div>
+                <div id="display-id" class="text-xs text-yellow-600 font-mono tracking-widest">---</div>
+            </div>
+            <div class="grid grid-cols-4 gap-3">
+                <input type="text" id="barcode-input" oninput="handleManualInput(this.value)" class="col-span-3 bg-slate-950 border border-slate-700 rounded-2xl p-4 text-white font-mono outline-none focus:border-yellow-500" placeholder="條碼號碼">
+                <input type="number" id="qty-input" value="1" class="col-span-1 bg-slate-950 border border-slate-700 rounded-2xl p-4 text-2xl font-black text-center text-yellow-500 outline-none">
+                <button onclick="addRecord()" class="col-span-4 btn-gold py-5 rounded-2xl active:scale-95 text-xl shadow-lg">確認送出</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="p-4 flex-1 pb-32">
+        <div class="flex justify-between items-center mb-4 px-2">
+            <h2 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recent Activity</h2>
+            <button onclick="exportCSV()" class="text-xs font-bold text-emerald-500">匯出 CSV</button>
+        </div>
+        <div id="inventory-list" class="space-y-3"></div>
+    </section>
+
+    <div class="fixed bottom-6 left-6 right-6 flex gap-3 z-[100]">
+        <button onclick="clearAll()" class="bg-slate-900 border border-slate-800 text-slate-500 px-6 py-4 rounded-3xl text-[10px] font-bold">RESET</button>
+        <div class="flex-1 bg-yellow-500 p-4 rounded-3xl flex justify-between items-center px-8 shadow-2xl shadow-yellow-500/20">
+            <span class="text-black font-bold text-xs">TOTAL</span>
+            <span id="total-count" class="text-2xl font-black text-black leading-none">0</span>
         </div>
     </div>
 
-    <div class="bg-slate-900 p-5 rounded-3xl border border-slate-800 mb-4 shadow-xl text-center">
-        <div id="display-name" class="text-lg font-bold mb-1">等待指令...</div>
-        <div id="display-id" class="text-xs text-yellow-600 font-mono mb-4 uppercase tracking-widest">---</div>
-        
-        <div class="grid grid-cols-3 gap-2">
-            <input type="text" id="barcode-input" class="col-span-2 bg-black border border-slate-700 rounded-xl p-4 text-white font-mono" placeholder="條碼">
-            <input type="number" id="qty-input" value="1" class="bg-black border border-slate-700 rounded-xl p-4 text-2xl font-black text-center text-yellow-500">
-            <button id="submit-btn" class="col-span-3 bg-yellow-500 text-black py-4 rounded-xl font-black text-lg">確認送出</button>
+    <div id="bind-modal" class="modal-view">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-xl font-bold text-white italic">⚠️ 找不到條碼</h3>
+            <button onclick="closeModal('bind-modal')" class="text-slate-500 text-4xl">&times;</button>
         </div>
+        <div class="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-2xl mb-6">
+            <p class="text-[9px] text-yellow-600 font-bold uppercase mb-1">目前掃到</p>
+            <p id="unknown-barcode-display" class="text-xl font-mono font-bold text-white"></p>
+        </div>
+        <input type="text" id="bind-search-input" oninput="filterBindSearch()" class="w-full bg-slate-900 border border-slate-800 p-5 rounded-2xl mb-6 text-white" placeholder="輸入商品名稱搜尋...">
+        <div id="bind-results" class="flex-1 overflow-y-auto space-y-2 mb-4"></div>
+        <button onclick="openManualCreate()" class="w-full bg-slate-800 text-blue-400 py-4 rounded-2xl font-bold text-sm">全新商品？點此手動新增</button>
     </div>
 
-    <div id="inventory-list" class="space-y-2 mb-20"></div>
-
-    <div id="admin-modal" class="hidden modal-view">
-        <div class="flex justify-between mb-4">
-            <h2 class="text-xl font-bold">⚙️ 商品管理</h2>
-            <button id="close-admin" class="text-3xl">&times;</button>
+    <div id="admin-modal" class="modal-view">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-xl font-bold text-white italic">⚙️ 資料庫管理</h3>
+            <button onclick="closeModal('admin-modal')" class="text-slate-500 text-4xl">&times;</button>
         </div>
-        <div class="space-y-3 mb-6 bg-slate-900 p-4 rounded-xl">
-            <input type="text" id="new-id" class="w-full bg-black border border-slate-700 p-3 rounded text-sm" placeholder="貨號">
-            <input type="text" id="new-barcode" class="w-full bg-black border border-slate-700 p-3 rounded text-sm" placeholder="條碼">
-            <input type="text" id="new-name" class="w-full bg-black border border-slate-700 p-3 rounded text-sm" placeholder="品名">
-            <button id="save-master" class="w-full bg-emerald-600 py-3 rounded font-bold">新增至資料庫</button>
+        <div class="space-y-3 mb-6">
+            <input type="text" id="admin-id" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl" placeholder="貨號">
+            <input type="text" id="admin-barcode" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl font-mono" placeholder="條碼">
+            <input type="text" id="admin-name" class="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl" placeholder="品名">
+            <button onclick="saveNewToMaster()" class="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg">新增至主資料庫</button>
         </div>
-        <div id="local-list" class="flex-1 overflow-y-auto space-y-2 text-xs"></div>
-    </div>
-
-    <div class="fixed bottom-0 left-0 right-0 z-[1000]">
-        <div id="debug-console">系統診斷中...</div>
+        <div id="local-master-list" class="flex-1 overflow-y-auto space-y-2"></div>
     </div>
 
     <script>
-        // --- 診斷工具 ---
-        const log = (msg) => {
-            const el = document.getElementById('debug-console');
-            el.innerHTML += `<div>> ${msg}</div>`;
-            el.scrollTop = el.scrollHeight;
-        };
-        window.onerror = (m, u, l) => log(`錯誤: ${m} at line ${l}`);
+        const masterData = [{"id": "46", "barcode": "8026861046751", "name": "Domori克里歐羅70%黑巧克力50g"}, {"id": "1340", "barcode": "8026861052554", "name": "Domori克里歐羅產區杏仁蜂蜜巧克"}, {"id": "70", "barcode": "8026861049042", "name": "Domori72%黑巧克力裹薑糖40g"}, {"id": "151", "barcode": "8413907982706", "name": "阿瑪利耶慕夏70%迦納黑巧克力"}, {"id": "752", "barcode": "5000277003280", "name": "帝王15年蘇格蘭威士忌750ml"}, {"id": "728", "barcode": "5000277000258", "name": "帝王12年蘇格蘭威士忌700ml"}, {"id": "730", "barcode": "5000277002573", "name": "帝王18年蘇格蘭威士忌750ml"}, {"id": "150", "barcode": "8413907982607", "name": "阿瑪利耶慕夏32%迦納牛奶巧克力"}];
 
-        // --- 資料 ---
-        const masterData = [
-            {"id": "46", "barcode": "8026861046751", "name": "Domori 70%巧克力"},
-            {"id": "752", "barcode": "5000277003280", "name": "帝王 15年威士忌"}
-        ];
         let inventory = JSON.parse(localStorage.getItem('cup_inv')) || [];
+        let manualBinds = JSON.parse(localStorage.getItem('cup_binds')) || {};
         let localMaster = JSON.parse(localStorage.getItem('cup_local_master')) || [];
         let scanner;
 
-        // --- 初始化 ---
-        window.onload = () => {
-            log("頁面載入成功");
-            renderInventory();
-            
-            // 綁定事件 (不使用 HTML 內的 onclick，改用 JavaScript 綁定更穩定)
-            document.getElementById('start-btn').addEventListener('click', startCam);
-            document.getElementById('admin-btn').addEventListener('click', () => {
-                log("開啟管理介面");
-                document.getElementById('admin-modal').classList.add('modal-view');
-                renderLocalMaster();
+        function initScanner() {
+            document.getElementById('cam-gate').style.display = 'none';
+            scanner = new Html5Qrcode("reader");
+            scanner.start({ facingMode: "environment" }, { fps: 20, qrbox: {width: 250, height: 160} }, (text) => {
+                playFlash();
+                document.getElementById('barcode-input').value = text;
+                lookupProduct(text);
             });
-            document.getElementById('close-admin').addEventListener('click', () => {
-                document.getElementById('admin-modal').classList.remove('modal-view');
-            });
-            document.getElementById('submit-btn').addEventListener('click', addItem);
-            document.getElementById('save-master').addEventListener('click', saveNewMaster);
-        };
-
-        // --- 相機控制 ---
-        async function startCam() {
-            log("嘗試啟動相機...");
-            try {
-                scanner = new Html5Qrcode("reader");
-                await scanner.start(
-                    { facingMode: "environment" },
-                    { fps: 15, qrbox: 250 },
-                    (text) => {
-                        log("掃描成功: " + text);
-                        document.getElementById('barcode-input').value = text;
-                        checkItem(text);
-                    }
-                );
-                document.getElementById('placeholder').style.display = 'none';
-                log("相機已啟動");
-            } catch (e) {
-                log("相機錯誤: " + e);
-                alert("相機開啟失敗，請確認網址為 HTTPS 且已允許權限");
-            }
         }
 
-        // --- 邏輯 ---
-        function checkItem(code) {
-            const all = [...masterData, ...localMaster];
-            const found = all.find(i => String(i.barcode) === code);
-            const nameEl = document.getElementById('display-name');
-            const idEl = document.getElementById('display-id');
-            if(found) {
-                nameEl.innerText = found.name;
-                idEl.innerText = "ID: " + found.id;
-                nameEl.classList.remove('text-red-500');
+        function lookupProduct(code) {
+            const cleanCode = code.trim();
+            const allMaster = [...masterData, ...localMaster];
+            const found = allMaster.find(m => String(m.barcode) === cleanCode) || manualBinds[cleanCode];
+            
+            if (found) {
+                document.getElementById('display-name').innerText = found.name;
+                document.getElementById('display-id').innerText = "ID: " + found.id;
+                document.getElementById('display-name').classList.remove('text-red-500');
             } else {
-                nameEl.innerText = "⚠️ 找不到商品";
-                idEl.innerText = code;
-                nameEl.classList.add('text-red-500');
+                document.getElementById('display-name').innerText = "⚠️ 找不到此條碼";
+                document.getElementById('display-id').innerText = cleanCode;
+                document.getElementById('display-name').classList.add('text-red-500');
+                // 強化彈窗觸發
+                document.getElementById('unknown-barcode-display').innerText = cleanCode;
+                document.getElementById('bind-modal').classList.add('show-modal');
             }
         }
 
-        function addItem() {
-            const code = document.getElementById('barcode-input').value;
-            const qty = parseInt(document.getElementById('qty-input').value);
-            if(!code || !qty) return log("欄位空白");
-            
-            const all = [...masterData, ...localMaster];
-            const item = all.find(i => String(i.barcode) === code) || { id: "NEW", name: "未知商品" };
-            
-            inventory.unshift({ ...item, barcode: code, qty, time: new Date().toLocaleTimeString() });
-            localStorage.setItem('cup_inv', JSON.stringify(inventory));
-            renderInventory();
-            log("新增盤點: " + item.name);
-            document.getElementById('barcode-input').value = "";
-        }
+        function handleManualInput(val) { if (val.length >= 4) lookupProduct(val); }
 
-        function saveNewMaster() {
-            const id = document.getElementById('new-id').value;
-            const barcode = document.getElementById('new-barcode').value;
-            const name = document.getElementById('new-name').value;
-            if(!id || !barcode || !name) return alert("請填全");
-            localMaster.unshift({ id, barcode, name });
-            localStorage.setItem('cup_local_master', JSON.stringify(localMaster));
-            renderLocalMaster();
-            log("資料庫已新增: " + name);
-        }
-
-        function renderInventory() {
-            const list = document.getElementById('inventory-list');
-            list.innerHTML = inventory.map(i => `
-                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between">
-                    <div><b>${i.name}</b><br><small class="text-slate-500">${i.barcode}</small></div>
-                    <div class="text-yellow-500 font-bold text-xl">${i.qty}</div>
+        function filterBindSearch() {
+            const query = document.getElementById('bind-search-input').value.toLowerCase();
+            const resultsDiv = document.getElementById('bind-results');
+            if (query.length < 1) return resultsDiv.innerHTML = '';
+            const allMaster = [...masterData, ...localMaster];
+            const filtered = allMaster.filter(m => m.name.toLowerCase().includes(query)).slice(0, 10);
+            resultsDiv.innerHTML = filtered.map(item => `
+                <div onclick="bindBarcodeToItem('${item.id}', '${item.name}')" class="bg-blue-900/40 p-4 rounded-2xl border border-blue-500/30 flex justify-between items-center active:bg-blue-600">
+                    <div><div class="font-bold text-white">${item.name}</div><div class="text-[9px] text-slate-400 font-mono">${item.id}</div></div>
+                    <div class="text-[9px] font-bold border border-blue-400 px-3 py-1 rounded-full text-blue-300">新增條碼</div>
                 </div>
             `).join('');
         }
 
+        function bindBarcodeToItem(id, name) {
+            const code = document.getElementById('unknown-barcode-display').innerText;
+            manualBinds[code] = { id, name };
+            localStorage.setItem('cup_binds', JSON.stringify(manualBinds));
+            closeModal('bind-modal');
+            lookupProduct(code);
+        }
+
+        function openManualCreate() {
+            const code = document.getElementById('unknown-barcode-display').innerText;
+            closeModal('bind-modal');
+            document.getElementById('admin-barcode').value = code;
+            document.getElementById('admin-modal').classList.add('show-modal');
+        }
+
+        function openAdmin() { document.getElementById('admin-modal').classList.add('show-modal'); renderLocalMaster(); }
+        function closeModal(id) { document.getElementById(id).classList.remove('show-modal'); }
+
+        function saveNewToMaster() {
+            const id = document.getElementById('admin-id').value.trim();
+            const barcode = document.getElementById('admin-barcode').value.trim();
+            const name = document.getElementById('admin-name').value.trim();
+            if(!id || !barcode || !name) return alert("請填寫所有欄位");
+            localMaster.unshift({ id, barcode, name });
+            localStorage.setItem('cup_local_master', JSON.stringify(localMaster));
+            renderLocalMaster();
+            alert("已新增！");
+        }
+
         function renderLocalMaster() {
-            const list = document.getElementById('local-list');
-            list.innerHTML = localMaster.map(m => `
-                <div class="p-2 border-b border-slate-800">${m.name} (${m.id})</div>
+            document.getElementById('local-master-list').innerHTML = localMaster.map((m, idx) => `
+                <div class="bg-slate-900 p-3 rounded-2xl border border-slate-800 flex justify-between items-center text-xs">
+                    <div><b>${m.name}</b><br><span class="text-slate-500">${m.id} | ${m.barcode}</span></div>
+                    <button onclick="localMaster.splice(${idx},1);localStorage.setItem('cup_local_master',JSON.stringify(localMaster));renderLocalMaster();" class="text-red-500 font-bold p-2">刪除</button>
+                </div>
             `).join('');
         }
+
+        function addRecord() {
+            const code = document.getElementById('barcode-input').value.trim();
+            const qty = parseInt(document.getElementById('qty-input').value);
+            if (!code || isNaN(qty)) return;
+            const allMaster = [...masterData, ...localMaster];
+            const item = allMaster.find(m => String(m.barcode) === code) || manualBinds[code] || { id: "NEW", name: "未知商品" };
+            inventory.unshift({ ...item, barcode: code, qty, time: new Date().toLocaleTimeString() });
+            localStorage.setItem('cup_inv', JSON.stringify(inventory));
+            renderInventory();
+            document.getElementById('barcode-input').value = '';
+            document.getElementById('display-name').innerText = "等待掃描";
+        }
+
+        function renderInventory() {
+            document.getElementById('inventory-list').innerHTML = inventory.map((i, idx) => `
+                <div class="bg-slate-900/60 p-4 rounded-3xl border border-slate-800 flex justify-between items-center">
+                    <div class="flex-1 pr-4">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-[9px] bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">${i.id}</span>
+                            <span class="font-bold text-slate-100">${i.name}</span>
+                        </div>
+                        <div class="text-[9px] text-slate-600 font-mono tracking-tighter">${i.barcode} • ${i.time}</div>
+                    </div>
+                    <div class="text-xl font-black text-yellow-500 px-4">${i.qty}</div>
+                    <button onclick="inventory.splice(${idx},1);localStorage.setItem('cup_inv',JSON.stringify(inventory));renderInventory();" class="text-slate-700 text-xl pr-2">&times;</button>
+                </div>
+            `).join('');
+            document.getElementById('total-count').innerText = inventory.reduce((a, b) => a + b.qty, 0);
+        }
+
+        function playFlash() {
+            const f = document.getElementById('flash-overlay');
+            f.classList.add('flash-active');
+            setTimeout(() => f.classList.remove('flash-active'), 300);
+            if (navigator.vibrate) navigator.vibrate(80);
+        }
+        function clearAll() { if(confirm("確定清空盤點？")) { inventory = []; localStorage.setItem('cup_inv',JSON.stringify(inventory)); renderInventory(); } }
+        function exportCSV() {
+            let csv = "\ufeff貨號,品名,條碼,數量,時間\n";
+            inventory.forEach(i => csv += `"${i.id}","${i.name}","${i.barcode}",${i.qty},"${i.time}"\n`);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+            a.download = `Cupicho_Inventory_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+        }
+        renderInventory();
     </script>
 </body>
 </html>
