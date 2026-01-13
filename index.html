@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CUPICHO PRO V4.1</title>
+    <title>CUPICHO PRO V4.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
@@ -24,7 +24,7 @@
     <header class="p-4 flex justify-between items-center bg-slate-950 border-b border-slate-900 sticky top-0 z-[100]">
         <div>
             <h1 class="text-xl font-black text-yellow-500 italic leading-none">CUPICHO</h1>
-            <p class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Database Updated (1,769 Items)</p>
+            <p id="db-status" class="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">載入中...</p>
         </div>
         <div class="flex gap-2">
             <button id="torch-btn" onclick="toggleTorch()" class="hidden bg-slate-800 text-yellow-500 px-3 py-2 rounded-xl border border-slate-700 text-xs font-bold">🔦 補光</button>
@@ -45,24 +45,20 @@
                 <div class="absolute -top-1 -right-1 w-10 h-10 border-t-4 border-r-4 border-yellow-500 rounded-tr-2xl"></div>
                 <div class="absolute -bottom-1 -left-1 w-10 h-10 border-b-4 border-l-4 border-yellow-500 rounded-bl-2xl"></div>
                 <div class="absolute -bottom-1 -right-1 w-10 h-10 border-b-4 border-r-4 border-yellow-500 rounded-br-2xl"></div>
-                <div class="absolute inset-0 flex items-center justify-center">
-                   <div class="w-full h-[1px] bg-yellow-400/50 shadow-[0_0_8px_#fbbf24] animate-pulse"></div>
-                </div>
             </div>
-            <p class="absolute bottom-10 text-[10px] text-yellow-500/60 font-bold uppercase tracking-[0.3em]">對準條碼中心點</p>
         </div>
     </section>
 
     <section class="p-4 -mt-10 relative z-30">
-        <div class="bg-slate-900/90 border border-slate-800 rounded-[32px] p-6 shadow-2xl backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-800 rounded-[32px] p-6 shadow-2xl backdrop-blur-md">
             <div class="text-center mb-6 border-b border-slate-800 pb-4">
-                <div id="display-name" class="text-lg font-bold text-white mb-1">等待掃描...</div>
+                <div id="display-name" class="text-lg font-bold text-white mb-1">等待掃描</div>
                 <div id="display-id" class="text-xs text-yellow-600 font-mono tracking-widest uppercase italic">---</div>
             </div>
             <div class="grid grid-cols-4 gap-3">
-                <input type="text" id="barcode-input" oninput="handleManualInput(this.value)" class="col-span-3 bg-black/50 border border-slate-700 rounded-2xl p-4 text-white font-mono outline-none focus:border-yellow-500 transition-all" placeholder="條碼編號">
-                <input type="number" id="qty-input" value="1" class="col-span-1 bg-black/50 border border-slate-700 rounded-2xl p-4 text-2xl font-black text-center text-yellow-500 outline-none">
-                <button onclick="addRecord()" class="col-span-4 btn-gold py-5 rounded-2xl active:scale-95 text-xl shadow-lg transition-all">確認送出</button>
+                <input type="text" id="barcode-input" oninput="handleManualInput(this.value)" class="col-span-3 bg-black border border-slate-700 rounded-2xl p-4 text-white font-mono outline-none focus:border-yellow-500" placeholder="條碼編號">
+                <input type="number" id="qty-input" value="1" class="col-span-1 bg-black border border-slate-700 rounded-2xl p-4 text-2xl font-black text-center text-yellow-500 outline-none">
+                <button onclick="addRecord()" class="col-span-4 btn-gold py-5 rounded-2xl active:scale-95 text-xl shadow-lg">確認送出</button>
             </div>
         </div>
     </section>
@@ -76,9 +72,9 @@
     </section>
 
     <div class="fixed bottom-6 left-6 right-6 flex gap-3 z-[100]">
-        <button onclick="clearAll()" class="bg-slate-900 border border-slate-800 text-slate-500 px-6 py-4 rounded-3xl text-[10px] font-bold uppercase">Reset</button>
+        <button onclick="clearAll()" class="bg-slate-900 border border-slate-800 text-slate-500 px-6 py-4 rounded-3xl text-[10px] font-bold">RESET</button>
         <div class="flex-1 bg-yellow-500 p-4 rounded-3xl flex justify-between items-center px-8 shadow-xl">
-            <span class="text-black font-bold text-xs">TOTAL</span>
+            <span class="text-black font-bold text-xs uppercase font-mono">Total</span>
             <span id="total-count" class="text-2xl font-black text-black leading-none">0</span>
         </div>
     </div>
@@ -90,9 +86,9 @@
         </div>
         <div class="bg-yellow-500/10 border border-yellow-500/30 p-5 rounded-2xl mb-6 text-center">
             <p class="text-[9px] text-yellow-600 font-bold uppercase mb-1">掃描結果</p>
-            <p id="unknown-barcode-display" class="text-2xl font-mono font-bold text-white tracking-tighter"></p>
+            <p id="unknown-barcode-display" class="text-2xl font-mono font-bold text-white"></p>
         </div>
-        <input type="text" id="bind-search-input" oninput="filterBindSearch()" class="w-full bg-slate-900 border border-slate-800 p-5 rounded-2xl mb-6 text-white" placeholder="搜尋品名進行綁定...">
+        <input type="text" id="bind-search-input" oninput="filterBindSearch()" class="w-full bg-slate-900 border border-slate-800 p-5 rounded-2xl mb-6 text-white outline-none focus:border-yellow-500" placeholder="搜尋品名進行綁定...">
         <div id="bind-results" class="flex-1 overflow-y-auto space-y-2 mb-4"></div>
         <button onclick="openManualCreate()" class="w-full bg-slate-800 text-blue-400 py-4 rounded-2xl font-bold text-sm">全新商品？點此手動新增</button>
     </div>
@@ -112,39 +108,13 @@
     </div>
 
     <script>
-        /** 重要：此處已匯入最新的 1,769 筆資料 **/
-        const masterData =[
-    {"id": "0", "barcode": "8017490027105", "name": "艾美黛黃金水果手工巧克力(5顆)"},
-    {"id": "1", "barcode": "8017490020083", "name": "艾美黛托斯卡尼莊園90黑巧克力(迷你)"},
-    {"id": "2", "barcode": "8017490020373", "name": "艾美黛托斯卡尼莊園70黑巧克力(迷你)"},
-    {"id": "3", "barcode": "8017490020007", "name": "艾美黛托斯尼卡莊園63黑巧克力(迷你)"},
-    {"id": "4", "barcode": "8017490160116", "name": "艾美黛金豆獎黑巧克力(黑盒子)"},
-    {"id": "5", "barcode": "8017490050868", "name": "艾美黛托斯卡尼莊園70黑巧克力片"},
-    {"id": "6", "barcode": "8017490050882", "name": "艾美黛托斯卡尼莊園63黑巧克力片"},
-    {"id": "7", "barcode": "8017490050851", "name": "艾美黛托斯卡尼莊園牛奶巧克力片"},
-    {"id": "8", "barcode": "8017490050899", "name": "艾美黛托斯卡尼莊園牛奶榛果巧克力片"},
-    {"id": "9", "barcode": "8017490050912", "name": "艾美黛托斯卡尼莊園白巧克力片"},
-    {"id": "10", "barcode": "8017490020410", "name": "艾美黛克里歐羅黑巧克力(迷你)"},
-    {"id": "11", "barcode": "8017490013009", "name": "艾美黛托斯卡尼莊園70黑巧克力片(12入)"},
-    {"id": "12", "barcode": "8017490040500", "name": "艾美黛特級黑巧克力(內含9片)"},
-    {"id": "13", "barcode": "8017490012019", "name": "艾美黛托斯卡尼莊園63黑巧克力片(12入)"},
-    {"id": "14", "barcode": "8017490035001", "name": "艾美黛金豆獎黑巧克力(12入)"},
-    {"id": "15", "barcode": "8017490001006", "name": "艾美黛克里歐羅黑巧克力片(12入)"},
-    {"id": "46", "barcode": "8026861046751", "name": "Domori克里歐羅70%黑巧克力50g"},
-    {"id": "70", "barcode": "8026861049042", "name": "Domori72%黑巧克力裹薑糖40g"},
-    {"id": "151", "barcode": "8413907982706", "name": "阿瑪利耶慕夏70%迦納黑巧克力"},
-    {"id": "752", "barcode": "5000277003280", "name": "帝王15年蘇格蘭威士忌750ml"},
-    {"id": "728", "barcode": "5000277000258", "name": "帝王12年蘇格蘭威士忌700ml"},
-    {"id": "730", "barcode": "5000277002573", "name": "帝王18年蘇格蘭威士忌750ml"},
-    {"id": "120", "barcode": "8413907106003", "name": "阿瑪利耶慕夏32%草莓巧克力"},
-    {"id": "315", "barcode": "8006070001004", "name": "Gavioli無酒精葡萄氣泡飲紅750m"},
-    {"id": "6221", "barcode": "4901625021333", "name": "扇屋點心起司(新)"},
-    {"id": "6205", "barcode": "4540624403337", "name": "草莓夾心巧克力"},
-    {"id": "6226", "barcode": "4901330646197", "name": "加樂比薯條杯-沙拉口味"},
-    {"id": "6166", "barcode": "4901620300914", "name": "日清奶油酥餅"}
-    // ... (因篇幅限制，請確認您已正確替換為完整的 1,769 筆 CSV 內容)
-]
-;
+        // --- 核心資料比對修復邏輯 ---
+        function clean(code) { 
+            return String(code).replace(/\s+/g, '').replace(/\.0$/, ''); 
+        }
+
+        // --- 商品主檔 (此處僅為結構，請從下方對話框貼上 1,769 筆資料) ---
+        const masterData = []; 
 
         let inventory = JSON.parse(localStorage.getItem('cup_inv')) || [];
         let manualBinds = JSON.parse(localStorage.getItem('cup_binds')) || {};
@@ -152,14 +122,22 @@
         let scanner;
         let isTorchOn = false;
 
+        // 更新狀態顯示
+        window.onload = () => {
+            const count = masterData.length + localMaster.length;
+            document.getElementById('db-status').innerText = `Database: ${count} Items`;
+            renderInventory();
+        };
+
         async function initScanner() {
             document.getElementById('cam-gate').style.display = 'none';
             scanner = new Html5Qrcode("reader");
-            const config = { fps: 30, qrbox: { width: 300, height: 180 }, aspectRatio: 1.0, videoConstraints: { facingMode: "environment", focusMode: "continuous", advanced: [{torch: false}] } };
+            const config = { fps: 30, qrbox: { width: 300, height: 180 }, aspectRatio: 1.0, videoConstraints: { facingMode: "environment", focusMode: "continuous" } };
             await scanner.start({ facingMode: "environment" }, config, (text) => {
                 playFlash();
-                document.getElementById('barcode-input').value = text;
-                lookupProduct(text);
+                const cleanCode = clean(text);
+                document.getElementById('barcode-input').value = cleanCode;
+                lookupProduct(cleanCode);
             });
             const track = scanner.getVideoTrack();
             if (track && track.getCapabilities().torch) document.getElementById('torch-btn').classList.remove('hidden');
@@ -173,9 +151,11 @@
         }
 
         function lookupProduct(code) {
-            const cleanCode = code.trim();
+            const cleanCode = clean(code);
             const allMaster = [...masterData, ...localMaster];
-            const found = allMaster.find(m => String(m.barcode) === cleanCode) || manualBinds[cleanCode];
+            // 使用修復後的 cleanCode 進行精準比對
+            const found = allMaster.find(m => clean(m.barcode) === cleanCode) || manualBinds[cleanCode];
+            
             if (found) {
                 document.getElementById('display-name').innerText = found.name;
                 document.getElementById('display-id').innerText = "ID: " + found.id;
@@ -190,27 +170,31 @@
         }
 
         function handleManualInput(val) { if (val.length >= 4) lookupProduct(val); }
+        
         function filterBindSearch() {
             const query = document.getElementById('bind-search-input').value.toLowerCase();
             const resultsDiv = document.getElementById('bind-results');
             if (query.length < 1) return resultsDiv.innerHTML = '';
             const allMaster = [...masterData, ...localMaster];
             const filtered = allMaster.filter(m => m.name.toLowerCase().includes(query)).slice(0, 10);
-            resultsDiv.innerHTML = filtered.map(item => `<div onclick="bindBarcodeToItem('${item.id}', '${item.name}')" class="bg-blue-900/40 p-4 rounded-2xl border border-blue-500/30 flex justify-between items-center active:bg-blue-600"><div><div class="font-bold text-white">${item.name}</div><div class="text-[9px] text-slate-400 font-mono">${item.id}</div></div><div class="text-[9px] font-bold border border-blue-400 px-3 py-1 rounded-full text-blue-300">新增條碼</div></div>`).join('');
+            resultsDiv.innerHTML = filtered.map(item => `<div onclick="bindBarcodeToItem('${item.id}', '${item.name}')" class="bg-blue-900/40 p-4 rounded-2xl border border-blue-500/30 flex justify-between items-center active:bg-blue-600 mb-1"><div><div class="font-bold text-white text-sm">${item.name}</div><div class="text-[9px] text-slate-400 font-mono">${item.id}</div></div><div class="text-[9px] font-bold border border-blue-400 px-3 py-1 rounded-full text-blue-300">新增條碼</div></div>`).join('');
         }
+
         function bindBarcodeToItem(id, name) {
-            const code = document.getElementById('unknown-barcode-display').innerText;
+            const code = clean(document.getElementById('unknown-barcode-display').innerText);
             manualBinds[code] = { id, name };
             localStorage.setItem('cup_binds', JSON.stringify(manualBinds));
             closeModal('bind-modal');
             lookupProduct(code);
         }
+
         function openManualCreate() { closeModal('bind-modal'); document.getElementById('admin-barcode').value = document.getElementById('unknown-barcode-display').innerText; document.getElementById('admin-modal').classList.add('show-modal'); }
         function openAdmin() { document.getElementById('admin-modal').classList.add('show-modal'); renderLocalMaster(); }
         function closeModal(id) { document.getElementById(id).classList.remove('show-modal'); }
+
         function saveNewToMaster() {
             const id = document.getElementById('admin-id').value.trim();
-            const barcode = document.getElementById('admin-barcode').value.trim();
+            const barcode = clean(document.getElementById('admin-barcode').value.trim());
             const name = document.getElementById('admin-name').value.trim();
             if(!id || !barcode || !name) return alert("請填寫所有欄位");
             localMaster.unshift({ id, barcode, name });
@@ -218,25 +202,29 @@
             renderLocalMaster();
             alert("已新增！");
         }
+
         function renderLocalMaster() {
-            document.getElementById('local-master-list').innerHTML = localMaster.map((m, idx) => `<div class="bg-slate-900 p-3 rounded-2xl border border-slate-800 flex justify-between items-center text-xs"><div><b>${m.name}</b><br><span class="text-slate-500">${m.id} | ${m.barcode}</span></div><button onclick="localMaster.splice(${idx},1);localStorage.setItem('cup_local_master',JSON.stringify(localMaster));renderLocalMaster();" class="text-red-500 font-bold p-2">刪除</button></div>`).join('');
+            document.getElementById('local-master-list').innerHTML = localMaster.map((m, idx) => `<div class="bg-slate-900 p-3 rounded-2xl border border-slate-800 flex justify-between items-center text-xs mb-1"><div><b>${m.name}</b><br><span class="text-slate-500">${m.id} | ${m.barcode}</span></div><button onclick="localMaster.splice(${idx},1);localStorage.setItem('cup_local_master',JSON.stringify(localMaster));renderLocalMaster();" class="text-red-500 font-bold p-2">刪除</button></div>`).join('');
         }
+
         function addRecord() {
-            const code = document.getElementById('barcode-input').value.trim();
+            const code = clean(document.getElementById('barcode-input').value);
             const qty = parseInt(document.getElementById('qty-input').value);
             if (!code || isNaN(qty)) return;
             const allMaster = [...masterData, ...localMaster];
-            const item = allMaster.find(m => String(m.barcode) === code) || manualBinds[code] || { id: "NEW", name: "未知商品" };
+            const item = allMaster.find(m => clean(m.barcode) === code) || manualBinds[code] || { id: "NEW", name: "未知商品" };
             inventory.unshift({ ...item, barcode: code, qty, time: new Date().toLocaleTimeString() });
             localStorage.setItem('cup_inv', JSON.stringify(inventory));
             renderInventory();
             document.getElementById('barcode-input').value = '';
             document.getElementById('display-name').innerText = "等待掃描";
         }
+
         function renderInventory() {
-            document.getElementById('inventory-list').innerHTML = inventory.map((i, idx) => `<div class="bg-slate-900/60 p-4 rounded-3xl border border-slate-800 flex justify-between items-center mb-2 shadow-sm"><div class="flex-1 pr-4"><div class="flex items-center gap-2 mb-1"><span class="text-[9px] bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">${i.id}</span><span class="font-bold text-slate-100">${i.name}</span></div><div class="text-[9px] text-slate-600 font-mono tracking-tighter">${i.barcode} • ${i.time}</div></div><div class="text-xl font-black text-yellow-500 px-4">${i.qty}</div><button onclick="inventory.splice(${idx},1);localStorage.setItem('cup_inv',JSON.stringify(inventory));renderInventory();" class="text-slate-700 text-xl pr-2">&times;</button></div>`).join('');
+            document.getElementById('inventory-list').innerHTML = inventory.map((i, idx) => `<div class="bg-slate-900/60 p-4 rounded-3xl border border-slate-800 flex justify-between items-center mb-2 shadow-sm"><div class="flex-1 pr-4"><div><span class="text-[9px] bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold mr-2">${i.id}</span><span class="font-bold text-slate-100 text-sm">${i.name}</span></div><div class="text-[9px] text-slate-600 font-mono tracking-tighter mt-1">${i.barcode} • ${i.time}</div></div><div class="text-xl font-black text-yellow-500 px-4">${i.qty}</div><button onclick="inventory.splice(${idx},1);localStorage.setItem('cup_inv',JSON.stringify(inventory));renderInventory();" class="text-slate-700 text-xl pr-2">&times;</button></div>`).join('');
             document.getElementById('total-count').innerText = inventory.reduce((a, b) => a + b.qty, 0);
         }
+
         function playFlash() { const f = document.getElementById('flash-overlay'); f.classList.add('flash-active'); setTimeout(() => f.classList.remove('flash-active'), 300); if (navigator.vibrate) navigator.vibrate(80); }
         function clearAll() { if(confirm("確定清空盤點數據？")) { inventory = []; localStorage.setItem('cup_inv',JSON.stringify(inventory)); renderInventory(); } }
         function exportCSV() {
@@ -246,8 +234,6 @@
             const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
             a.download = `Cupicho_Inventory_${new Date().toISOString().slice(0,10)}.csv`; a.click();
         }
-        renderInventory();
     </script>
 </body>
 </html>
-
