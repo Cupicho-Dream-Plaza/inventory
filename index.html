@@ -1,311 +1,362 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CUPICHO PRO V3.2</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <style>
-        body { background-color: #020617; color: #f8fafc; -webkit-tap-highlight-color: transparent; }
-        #reader { border: 2px solid #1e293b !important; border-radius: 16px; overflow: hidden; background: #000; min-height: 250px; }
-        .btn-gold { background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); color: #000; font-weight: 900; }
-        .flash-active { animation: flash 0.3s ease-out; }
-        @keyframes flash { 0% { background: rgba(59, 130, 246, 0.4); } 100% { background: transparent; } }
-        .modal-active { display: flex !important; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CUPICHO PRO V6.1</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    body { background-color: #020617; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent;}
+    .glass-card { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(51, 65, 85, 0.5); backdrop-filter: blur(12px); }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(15px); z-index: 50; display: flex; flex-direction: column; padding: 24px; animation: slideUp 0.3s ease-out; overflow-y: auto;}
+    @keyframes slideUp { from { transform: translateY(30%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .flash-active { animation: flash 0.3s ease-out; }
+    @keyframes flash { 0% { background: rgba(251, 191, 36, 0.5); } 100% { background: transparent; } }
+    select { text-overflow: ellipsis; }
+  </style>
 </head>
-<body class="p-4 font-sans max-w-md mx-auto min-h-screen pb-40 text-slate-100">
+<body>
+  <div id="root"></div>
 
-    <div id="flash-overlay" class="fixed inset-0 pointer-events-none z-[100]"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
 
-    <header class="mb-4 flex justify-between items-end relative z-10">
-        <div>
-            <h1 class="text-2xl font-black text-yellow-500 italic leading-none">CUPICHO</h1>
-            <p class="text-[10px] text-slate-500 tracking-widest uppercase font-bold">Stable System V3.2</p>
-        </div>
-        <button type="button" onclick="openAdmin()" class="relative z-20 text-[10px] bg-slate-800 text-yellow-500 px-3 py-2 rounded-full border border-slate-700 font-bold active:scale-90 transition-all">
-            ⚙️ 管理主檔
-        </button>
-    </header>
+    const firebaseConfig = null; 
+    let db = null;
+    if (firebaseConfig) {
+      try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+      } catch(e) { console.error("Firebase Init Error", e); }
+    }
 
-    <div id="reader-container" class="relative mb-4">
-        <div id="reader" class="shadow-2xl"></div>
-        <div id="cam-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-10 rounded-2xl border border-slate-800">
-            <button type="button" onclick="initScanner()" class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl active:scale-95 mb-2">
-                📷 啟動相機掃描
-            </button>
-            <p class="text-slate-500 text-[10px]">點擊後請允許相機權限</p>
-        </div>
-    </div>
+    const LOCATIONS = [
+      "辦公室", "梯間", "櫃檯區", "Anthon Berg (展示桌+珠寶櫃+壁櫃)", "DOMORI (展示桌+珠寶櫃+壁櫃)",
+      "Best Selling", "Gifts A", "Gifts B", "Elit", "Baci", "Belgian+Hamlet", "Caffarel+Guylian",
+      "片裝牆", "Ruta", "Mieszko", "酒區", "中島A", "中島B", "中島C", "中島D", 
+      "展示桌A(散巧前方)", "展示桌B(主視覺)", "展示桌C(長桌)"
+    ];
 
-    <section class="bg-slate-900/80 p-5 rounded-3xl border border-slate-800 mb-4 shadow-2xl relative z-10">
-        <div class="text-center mb-4 min-h-[70px] flex flex-col justify-center border-b border-slate-800 pb-2">
-            <div id="display-name" class="text-lg font-bold text-white leading-tight">等待操作...</div>
-            <div id="display-id" class="text-xs text-yellow-600 font-mono mt-2 uppercase">ID: ---</div>
-        </div>
+    function App() {
+      const [masterData, setMasterData] = useState(() => JSON.parse(localStorage.getItem('cup_master')) || []);
+      const [inventory, setInventory] = useState(() => JSON.parse(localStorage.getItem('cup_inv')) || []);
+      const [manualBinds, setManualBinds] = useState(() => JSON.parse(localStorage.getItem('cup_binds')) || {});
+      const [completedLocations, setCompletedLocations] = useState(() => JSON.parse(localStorage.getItem('cup_completed_locs')) || []);
+      const [currentLocation, setCurrentLocation] = useState(LOCATIONS[0]);
+      
+      const [scannedBarcode, setScannedBarcode] = useState('');
+      const [qty, setQty] = useState(1);
+      const [feedback, setFeedback] = useState('');
+      const [isScanning, setIsScanning] = useState(false);
+      
+      const scannerRef = useRef(null);
+      const fileInputRef = useRef(null); // 解決點擊失效的核心參照
 
-        <div class="grid grid-cols-3 gap-2 mt-4">
-            <div class="col-span-2">
-                <input type="text" id="barcode-input" oninput="processBarcode(this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white outline-none font-mono focus:border-yellow-500" placeholder="條碼">
-            </div>
-            <input type="number" id="qty-input" value="1" class="bg-slate-950 border border-slate-700 rounded-xl p-4 text-2xl font-black text-center text-yellow-500">
-            <button type="button" onclick="addEntry()" class="col-span-3 btn-gold py-4 rounded-xl active:scale-95 transition-all text-lg shadow-lg">確認送出</button>
-            <button type="button" id="bind-trigger" onclick="openSearch()" class="hidden col-span-3 bg-blue-600/20 border border-blue-500 text-blue-400 py-3 rounded-xl font-bold text-sm mt-1 animate-pulse italic">
-                🔍 找不到？新增條碼
-            </button>
-        </div>
-    </section>
+      const [showAdmin, setShowAdmin] = useState(false);
+      const [showSummary, setShowSummary] = useState(false);
+      const [unknownBarcode, setUnknownBarcode] = useState(null); 
+      const [searchQuery, setSearchQuery] = useState('');
+      const [newProductName, setNewProductName] = useState('');
 
-    <section class="relative z-10">
-        <div class="flex justify-between items-center mb-4 px-1">
-            <h2 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">History Log</h2>
-            <button type="button" onclick="exportCSV()" class="text-xs font-bold text-emerald-500">匯出 CSV</button>
-        </div>
-        <div id="inventory-list" class="space-y-2 text-sm"></div>
-    </section>
+      useEffect(() => { localStorage.setItem('cup_master', JSON.stringify(masterData)); }, [masterData]);
+      useEffect(() => { localStorage.setItem('cup_binds', JSON.stringify(manualBinds)); }, [manualBinds]);
+      useEffect(() => { localStorage.setItem('cup_completed_locs', JSON.stringify(completedLocations)); }, [completedLocations]);
+      useEffect(() => { 
+        localStorage.setItem('cup_inv', JSON.stringify(inventory)); 
+        if (db && inventory.length > 0) {
+           db.collection('inventory_sessions').doc('current').set({ items: inventory, lastUpdated: firebase.firestore.FieldValue.serverTimestamp() }).catch(e=>console.error(e));
+        }
+      }, [inventory]);
 
-    <div class="fixed bottom-6 left-4 right-4 max-w-md mx-auto flex gap-2 z-30">
-        <button type="button" onclick="clearData()" class="bg-slate-900 border border-slate-800 text-slate-600 px-5 py-4 rounded-2xl text-[10px] font-bold uppercase">Reset</button>
-        <div class="flex-1 bg-yellow-500 p-4 rounded-2xl flex justify-between items-center px-8 shadow-xl">
-            <span class="text-black font-bold text-xs uppercase font-mono">Total</span>
-            <span id="total-count" class="text-2xl font-black text-black leading-none">0</span>
-        </div>
-    </div>
-
-    <div id="search-modal" class="fixed inset-0 bg-slate-950/98 z-[100] hidden flex-col p-6">
-        <div class="flex justify-between items-center mb-6">
-            <h3 class="text-xl font-bold text-white italic">搜尋並綁定商品</h3>
-            <button onclick="closeSearch()" class="text-slate-400 text-4xl p-2">&times;</button>
-        </div>
-        <input type="text" id="master-search-input" oninput="filterMaster()" class="w-full bg-slate-900 border border-slate-700 rounded-2xl p-5 mb-6 outline-none focus:border-yellow-500 text-white" placeholder="輸入關鍵字...">
-        <div id="master-results" class="flex-1 overflow-y-auto space-y-3 pb-20"></div>
-    </div>
-
-    <div id="admin-modal" class="fixed inset-0 bg-slate-950/98 z-[110] hidden flex-col p-6">
-        <div class="flex justify-between items-center mb-6">
-            <h3 class="text-xl font-bold text-white italic">⚙️ 商品主檔管理</h3>
-            <button onclick="closeAdmin()" class="text-slate-400 text-4xl p-2">&times;</button>
-        </div>
-        <div class="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3 mb-6">
-            <input type="text" id="new-id" class="w-full bg-black border border-slate-700 rounded-xl p-3 text-sm text-white" placeholder="貨號 (Item ID)">
-            <input type="text" id="new-barcode" class="w-full bg-black border border-slate-700 rounded-xl p-3 text-sm text-white font-mono" placeholder="國際條碼 (Barcode)">
-            <input type="text" id="new-name" class="w-full bg-black border border-slate-700 rounded-xl p-3 text-sm text-white" placeholder="商品名稱 (Name)">
-            <button type="button" onclick="addNewMasterItem()" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold">確認新增至資料庫</button>
-        </div>
-        <div class="flex-1 overflow-y-auto">
-            <p class="text-[10px] text-slate-500 font-bold mb-3 uppercase">自定義商品清單</p>
-            <div id="local-master-list" class="space-y-2"></div>
-        </div>
-    </div>
-
-    <script>
-        // --- 核心變數 ---
-        let inventory = JSON.parse(localStorage.getItem('cup_inv')) || [];
-        let manualMappings = JSON.parse(localStorage.getItem('cup_binds')) || {};
-        let localMaster = JSON.parse(localStorage.getItem('cup_local_master')) || [];
-        let html5QrCode;
-
-        // --- 1. 相機功能 ---
-        async function initScanner() {
-            try {
-                const placeholder = document.getElementById('cam-placeholder');
-                if (placeholder) placeholder.style.display = 'none';
-                
-                html5QrCode = new Html5Qrcode("reader");
-                await html5QrCode.start(
-                    { facingMode: "environment" }, 
-                    { fps: 20, qrbox: { width: 250, height: 150 } }, 
-                    (text) => {
-                        playFeedback();
-                        document.getElementById('barcode-input').value = text;
-                        processBarcode(text);
-                    }
-                );
-            } catch (err) {
-                alert("相機開啟失敗，請檢查權限或網址是否為 HTTPS");
-                console.error(err);
+      const startScanner = async () => {
+        setIsScanning(true);
+        if (!scannerRef.current) scannerRef.current = new Html5Qrcode("reader");
+        try {
+          await scannerRef.current.start(
+            { facingMode: "environment" },
+            { fps: 30, qrbox: { width: 280, height: 160 }, aspectRatio: 1.0 },
+            (decodedText) => {
+               const f = document.getElementById('flash-overlay');
+               f.classList.add('flash-active');
+               setTimeout(() => f.classList.remove('flash-active'), 300);
+               if (navigator.vibrate) navigator.vibrate(80);
+               
+               const code = String(decodedText).trim();
+               setScannedBarcode(code);
+               handleLookup(code);
             }
-        }
+          );
+        } catch (err) { alert("啟動相機失敗"); setIsScanning(false); }
+      };
 
-        // --- 2. 管理功能 ---
-        function openAdmin() { 
-            document.getElementById('admin-modal').classList.add('modal-active');
-            renderLocalMaster();
+      const handleLookup = (code) => {
+        const found = masterData.find(m => String(m.barcode) === code) || manualBinds[code];
+        if (!found) {
+          setUnknownBarcode(code);
+          setSearchQuery('');
+          setNewProductName('');
         }
-        function closeAdmin() { 
-            document.getElementById('admin-modal').classList.remove('modal-active'); 
+      };
+
+      const handleAddRecord = () => {
+        if (!scannedBarcode || isNaN(qty)) return;
+        const item = masterData.find(m => String(m.barcode) === scannedBarcode) || manualBinds[scannedBarcode] || { id: "NEW", name: "未知商品" };
+        const existingIdx = inventory.findIndex(i => i.barcode === scannedBarcode && i.location === currentLocation);
+        let newInv = [...inventory];
+        
+        if (existingIdx > -1) {
+            newInv[existingIdx].qty += qty;
+            newInv[existingIdx].time = new Date().toLocaleTimeString();
+            const updatedItem = newInv.splice(existingIdx, 1)[0];
+            newInv.unshift(updatedItem);
+            setFeedback(`✅ 已累加: ${item.name}`);
+        } else {
+            newInv.unshift({ ...item, barcode: scannedBarcode, qty, location: currentLocation, time: new Date().toLocaleTimeString() });
+            setFeedback(`✅ 已新增: ${item.name}`);
         }
+        
+        setInventory(newInv);
+        setScannedBarcode('');
+        setQty(1);
+        setTimeout(() => setFeedback(''), 2500);
+      };
 
-        function addNewMasterItem() {
-            const id = document.getElementById('new-id').value.trim();
-            const barcode = document.getElementById('new-barcode').value.trim();
-            const name = document.getElementById('new-name').value.trim();
-            if(!id || !barcode || !name) return alert("請填寫完整資訊");
-            localMaster.unshift({ id, barcode, name });
-            localStorage.setItem('cup_local_master', JSON.stringify(localMaster));
-            document.getElementById('new-id').value = '';
-            document.getElementById('new-barcode').value = '';
-            document.getElementById('new-name').value = '';
-            renderLocalMaster();
+      const toggleLocationComplete = () => {
+        if (completedLocations.includes(currentLocation)) {
+          setCompletedLocations(completedLocations.filter(loc => loc !== currentLocation));
+        } else {
+          setCompletedLocations([...completedLocations, currentLocation]);
         }
+      };
 
-        function renderLocalMaster() {
-            const container = document.getElementById('local-master-list');
-            container.innerHTML = localMaster.map((item, idx) => `
-                <div class="bg-black p-3 rounded-xl border border-slate-800 flex justify-between items-center text-xs mb-2">
-                    <div><div class="font-bold text-white">${item.name}</div><div class="text-slate-500">${item.id} | ${item.barcode}</div></div>
-                    <button onclick="localMaster.splice(${idx},1);localStorage.setItem('cup_local_master', JSON.stringify(localMaster));renderLocalMaster();" class="text-red-900 font-bold p-2">刪除</button>
-                </div>
-            `).join('');
-        }
-
-        // --- 3. 掃描比對 ---
-        function processBarcode(code) {
-            if(!code) return;
-            const cleanCode = code.trim();
-            const allMaster = [...masterData, ...localMaster];
-            const item = allMaster.find(m => String(m.barcode).trim() === cleanCode) || manualMappings[cleanCode];
-            
-            const nameEl = document.getElementById('display-name');
-            const idEl = document.getElementById('display-id');
-            const bindBtn = document.getElementById('bind-trigger');
-
-            if (item) {
-                nameEl.innerText = item.name;
-                idEl.innerText = "ID: " + item.id;
-                nameEl.classList.remove('text-red-500');
-                bindBtn.classList.add('hidden');
-            } else {
-                nameEl.innerText = "⚠️ 找不到商品";
-                idEl.innerText = cleanCode;
-                nameEl.classList.add('text-red-500');
-                bindBtn.classList.remove('hidden');
+      // 檔案匯入核心邏輯
+      const handleImportCSV = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        Papa.parse(file, {
+            header: true, skipEmptyLines: true,
+            complete: function(res) {
+                const parsed = res.data.map(i => ({
+                    id: String(i['商品碼'] || '0'),
+                    name: String(i['商品名稱規格'] || '未知'),
+                    barcode: String(i['條碼'] || '').replace(/\s+/g, '').replace(/\.0$/, '')
+                })).filter(i => i.barcode);
+                setMasterData(parsed);
+                alert(`成功匯入 ${parsed.length} 筆最新商品資料！`);
+                setShowAdmin(false);
+                if (fileInputRef.current) fileInputRef.current.value = ""; // 重置 input 狀態
             }
-        }
+        });
+      };
 
-        function openSearch() {
-            document.getElementById('search-modal').classList.add('modal-active');
-            filterMaster();
+      const triggerFileInput = () => {
+        if (fileInputRef.current) {
+          fileInputRef.current.click();
         }
-        function closeSearch() { document.getElementById('search-modal').classList.remove('modal-active'); }
+      };
 
-        function filterMaster() {
-            const query = document.getElementById('master-search-input').value.toLowerCase();
-            const resultsDiv = document.getElementById('master-results');
-            const allMaster = [...masterData, ...localMaster];
-            resultsDiv.innerHTML = allMaster.filter(m => (m.name+m.id).toLowerCase().includes(query)).slice(0, 30).map(item => `
-                <div onclick="bindBarcodeToItem('${item.id}', '${item.name}')" class="bg-slate-900 p-5 rounded-2xl border border-slate-800 flex justify-between items-center active:bg-yellow-500 active:text-black mb-2 transition-colors">
-                    <div><div class="font-bold">${item.name}</div><div class="text-[10px] opacity-60 font-mono">${item.id}</div></div>
-                    <div class="text-[10px] font-bold border border-current px-2 py-1 rounded">選擇</div>
+      const bindExisting = (item) => {
+        setManualBinds({ ...manualBinds, [unknownBarcode]: { id: item.id, name: item.name } });
+        setUnknownBarcode(null);
+      };
+
+      const bindNewProduct = () => {
+        if(!newProductName) return alert("請輸入全新的商品名稱！");
+        setManualBinds({ ...manualBinds, [unknownBarcode]: { id: "NEW", name: newProductName } });
+        setUnknownBarcode(null);
+        alert(`已成功建立新品：${newProductName}`);
+      };
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          <header className="p-4 flex justify-between items-center bg-slate-950 border-b border-slate-900 sticky top-0 z-[100]">
+              <div>
+                  <h1 className="text-xl font-black text-yellow-500 italic leading-none">CUPICHO</h1>
+                  <p className="text-[9px] font-bold uppercase tracking-widest mt-1 text-slate-500">
+                    主檔: {masterData.length}
+                  </p>
+              </div>
+              <button onClick={() => setShowAdmin(true)} className="bg-slate-900 text-slate-400 px-4 py-2 rounded-xl border border-slate-800 text-xs font-bold">⚙️ 管理</button>
+          </header>
+
+          <section className="relative w-full aspect-square bg-black overflow-hidden border-b border-slate-900 shadow-xl">
+              <div id="reader" className="w-full h-full"></div>
+              {!isScanning && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950">
+                    <button onClick={startScanner} className="bg-yellow-500 text-black px-12 py-5 rounded-2xl font-black text-xl shadow-[0_0_30px_rgba(234,179,8,0.2)] active:scale-95 transition-all">
+                      📷 啟動極速掃描
+                    </button>
                 </div>
-            `).join('');
-        }
+              )}
+          </section>
 
-        function bindBarcodeToItem(id, name) {
-            const barcode = document.getElementById('barcode-input').value;
-            manualMappings[barcode] = { id, name };
-            localStorage.setItem('cup_binds', JSON.stringify(manualMappings));
-            closeSearch();
-            processBarcode(barcode);
-        }
+          <section className="p-4 -mt-10 relative z-30">
+              <div className="glass-card rounded-[32px] p-6 shadow-2xl">
+                  <div className="flex flex-col gap-2 mb-4">
+                      <div className="flex justify-between items-center ml-1">
+                        <label className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">當前盤點場域</label>
+                        <button onClick={toggleLocationComplete} className={`text-[10px] px-3 py-1.5 rounded-full font-bold transition-all shadow-sm ${completedLocations.includes(currentLocation) ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-slate-300'}`}>
+                          {completedLocations.includes(currentLocation) ? '✅ 已完成此區' : '⬜ 標記為完成'}
+                        </button>
+                      </div>
+                      <select value={currentLocation} onChange={e => setCurrentLocation(e.target.value)} className="w-full bg-black border border-slate-700 text-yellow-500 text-sm px-4 py-3 rounded-2xl outline-none appearance-none">
+                          {LOCATIONS.map(loc => <option key={loc} value={loc}>{completedLocations.includes(loc) ? '✅ ' : '📍 '}{loc}</option>)}
+                      </select>
+                      <div className="text-[10px] text-emerald-500 font-bold px-2 h-4">{feedback}</div>
+                  </div>
 
-        // --- 4. 盤點紀錄 ---
-        function addEntry() {
-            const code = document.getElementById('barcode-input').value.trim();
-            const qty = parseInt(document.getElementById('qty-input').value);
-            if(!code || isNaN(qty)) return;
-            const allMaster = [...masterData, ...localMaster];
-            const item = allMaster.find(m => String(m.barcode).trim() === code) || manualMappings[code] || { id: "NEW", name: "未知商品" };
-            const idx = inventory.findIndex(i => i.barcode === code);
-            if (idx > -1) { inventory[idx].qty += qty; } 
-            else { inventory.unshift({ id: item.id, barcode: code, name: item.name, qty: qty, time: new Date().toLocaleTimeString() }); }
-            saveAndRender();
-            document.getElementById('barcode-input').value = "";
-            document.getElementById('display-name').innerText = "等待掃描...";
-        }
+                  <div className="grid grid-cols-4 gap-3">
+                      <input type="text" value={scannedBarcode} onChange={e => { setScannedBarcode(e.target.value); handleLookup(e.target.value); }} className="col-span-3 bg-black border border-slate-700 rounded-2xl p-4 text-white font-mono outline-none focus:border-yellow-500" placeholder="掃描或手動條碼" />
+                      <input type="number" value={qty} onChange={e => setQty(parseInt(e.target.value)||1)} className="col-span-1 bg-black border border-slate-700 rounded-2xl p-4 text-2xl font-black text-center text-yellow-500 outline-none" />
+                      <button onClick={handleAddRecord} className="col-span-4 bg-gradient-to-br from-yellow-400 to-yellow-600 text-black py-5 rounded-2xl active:scale-95 text-xl font-bold shadow-lg">確認送出</button>
+                  </div>
+              </div>
+          </section>
 
-        function saveAndRender() {
-            localStorage.setItem('cup_inv', JSON.stringify(inventory));
-            const container = document.getElementById('inventory-list');
-            container.innerHTML = inventory.map((item, idx) => `
-                <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex justify-between items-center mb-2 shadow-sm">
-                    <div class="flex-1 pr-4">
-                        <div class="flex items-center gap-2">
-                            <span class="text-[9px] bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">${item.id}</span>
-                            <span class="font-bold text-slate-100">${item.name}</span>
+          <section className="p-4 flex-1 pb-32">
+              <div className="flex justify-between items-center mb-4 px-2">
+                  <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">歷史盤點清單</h2>
+                  <div className="flex gap-3">
+                      <button onClick={() => setShowSummary(true)} className="text-xs font-bold text-yellow-500 bg-yellow-500/10 px-3 py-1 rounded-lg">📊 各區總覽</button>
+                  </div>
+              </div>
+              <div className="space-y-3">
+                  {inventory.map((i, idx) => (
+                    <div key={idx} className="glass-card p-4 rounded-3xl flex justify-between items-center shadow-sm">
+                        <div className="flex-1 pr-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[8px] bg-yellow-500 text-black px-2 py-0.5 rounded font-bold">{i.location}</span>
+                                <span className="font-bold text-slate-100 text-sm truncate w-40">{i.name}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-mono mt-1">{i.barcode} • {i.time}</div>
                         </div>
-                        <div class="text-[9px] text-slate-500 font-mono mt-1">${item.barcode} | ${item.time}</div>
+                        <div className="flex items-center gap-4">
+                            <div className="text-xl font-black text-yellow-500">x{i.qty}</div>
+                            <button onClick={() => { const newInv = [...inventory]; newInv.splice(idx, 1); setInventory(newInv); }} className="text-slate-600 text-2xl hover:text-red-500">&times;</button>
+                        </div>
                     </div>
-                    <div class="text-xl font-black text-yellow-500">${item.qty}</div>
-                    <button onclick="inventory.splice(${idx},1);saveAndRender();" class="text-slate-700 ml-4 p-2 text-xl">&times;</button>
+                  ))}
+              </div>
+          </section>
+
+          <div className="fixed bottom-6 left-6 right-6 flex gap-3 z-[100]">
+              <button onClick={() => { if(confirm("確定清空盤點數據？")) setInventory([]); }} className="bg-slate-900 border border-slate-800 text-slate-500 px-6 py-4 rounded-3xl text-[10px] font-bold">RESET</button>
+              <div className="flex-1 bg-yellow-500 p-4 rounded-3xl flex justify-between items-center px-6 shadow-xl">
+                  <span className="text-black font-bold text-xs">TOTAL ITEMS</span>
+                  <span className="text-2xl font-black text-black leading-none">{inventory.reduce((a, b) => a + b.qty, 0)}</span>
+                  <button onClick={() => {
+                      let csv = "\ufeff場域,貨號,品名,條碼,數量,時間\n";
+                      inventory.forEach(i => csv += `"${i.location}","${i.id}","${i.name}","${i.barcode}",${i.qty},"${i.time}"\n`);
+                      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+                      a.download = `Cupicho_Inv_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+                  }} className="ml-4 bg-black text-yellow-500 px-3 py-2 rounded-xl text-xs font-black shadow-md">匯出</button>
+              </div>
+          </div>
+
+          {unknownBarcode && (
+            <div className="modal-overlay">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold text-white">⚠️ 條碼無對應資料</h3>
+                    <button onClick={() => setUnknownBarcode(null)} className="text-slate-500 text-4xl">&times;</button>
                 </div>
-            `).join('');
-            document.getElementById('total-count').innerText = inventory.reduce((a, b) => a + b.qty, 0);
-        }
+                <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-2xl mb-6 text-center">
+                    <p className="text-[10px] text-yellow-500 mb-1">掃描到的條碼</p>
+                    <p className="text-2xl font-mono font-bold text-white">{unknownBarcode}</p>
+                </div>
+                
+                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 mb-4 shadow-lg">
+                  <h4 className="text-emerald-400 font-bold mb-3 text-sm flex items-center gap-2"><span>✨</span> 選項 A：直接新增為全新商品</h4>
+                  <input type="text" value={newProductName} onChange={e=>setNewProductName(e.target.value)} className="w-full bg-black border border-slate-700 p-4 rounded-2xl text-white outline-none focus:border-emerald-500 mb-3" placeholder="請輸入商品名稱"/>
+                  <button onClick={bindNewProduct} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold shadow-md">✅ 確認新增並帶入</button>
+                </div>
 
-        function playFeedback() {
-            const overlay = document.getElementById('flash-overlay');
-            overlay.classList.add('flash-active');
-            setTimeout(() => overlay.classList.remove('flash-active'), 300);
-            if (navigator.vibrate) navigator.vibrate(80);
-        }
+                <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 flex-1 flex flex-col min-h-0">
+                  <h4 className="text-blue-400 font-bold mb-3 text-sm flex items-center gap-2"><span>🔍</span> 選項 B：尋找現有商品進行綁定</h4>
+                  <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} className="w-full bg-black border border-slate-700 p-4 rounded-2xl text-white outline-none focus:border-blue-500 mb-3" placeholder="搜尋主檔名稱..."/>
+                  <div className="flex-1 overflow-y-auto space-y-2">
+                    {searchQuery.length > 0 && masterData.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 10).map(item => (
+                      <div key={item.id} onClick={() => bindExisting(item)} className="bg-blue-900/30 p-4 rounded-xl border border-blue-500/20 flex justify-between items-center active:bg-blue-800">
+                          <div><div className="font-bold text-white text-xs">{item.name}</div></div>
+                          <span className="text-[10px] font-bold border border-blue-400 px-3 py-1 rounded-full text-blue-300">綁定</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+            </div>
+          )}
 
-        function clearData() { if(confirm("確定清空所有盤點紀錄？")) { inventory = []; saveAndRender(); } }
-        function exportCSV() {
-            let csv = "\ufeff貨號,條碼,品名,數量,時間\n";
-            inventory.forEach(i => csv += `"${i.id}","${i.barcode}","${i.name}",${i.qty},"${i.time}"\n`);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-            a.download = "CUPICHO_盤點_" + new Date().toISOString().slice(0,10) + ".csv";
-            a.click();
-        }
+          {showAdmin && (
+            <div className="modal-overlay">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl font-bold text-white italic">⚙️ 系統設定</h3>
+                    <button onClick={() => setShowAdmin(false)} className="text-slate-500 text-4xl">&times;</button>
+                </div>
+                
+                <div className="bg-emerald-900/20 border border-emerald-500/30 p-6 rounded-[32px] mb-6 flex flex-col items-center">
+                    <h4 className="text-emerald-500 font-bold mb-2 w-full text-left">📥 匯入新商品主檔 (CSV)</h4>
+                    <p className="text-xs text-slate-400 mb-6 w-full text-left leading-relaxed">請上傳您的 "Barcode 20260306.csv"<br/>系統將自動更新為最新的 1,825 筆商品資料。</p>
+                    
+                    {/* 使用 React useRef 確保點擊絕對有效 */}
+                    <input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleImportCSV} />
+                    <button onClick={triggerFileInput} className="bg-emerald-600 text-white w-full py-4 rounded-2xl font-bold shadow-lg active:scale-95 transition-all">
+                        📁 點擊選擇 CSV 檔案
+                    </button>
+                </div>
 
-        // --- 大量資料放在最後，避免阻塞主程式 ---
-        const masterData = [
-            {"id":"46","barcode":"8026861046751","name":"Domori克里歐羅70%黑巧克力50g"},
-            {"id":"1340","barcode":"8026861052554","name":"Domori克里歐羅產區杏仁蜂蜜巧克"},
-            {"id":"70","barcode":"8026861049042","name":"Domori72%黑巧克力裹薑糖40g"},
-            {"id":"151","barcode":"8413907982706","name":"阿瑪利耶慕夏70%迦納黑巧克力"},
-            {"id":"1590","barcode":"1590","name":"甜點-檸檬蛋白霜塔(片)"},
-            {"id":"1595","barcode":"1595","name":"甜點-經典蘋果塔(片)"},
-            {"id":"752","barcode":"5000277003280","name":"帝王15年蘇格蘭威士忌750ml"},
-            {"id":"728","barcode":"5000277000258","name":"帝王12年蘇格蘭威士忌700ml"},
-            {"id":"730","barcode":"5000277002573","name":"帝王18年蘇格蘭威士忌750ml"},
-            {"id":"150","barcode":"8413907982607","name":"阿瑪利耶慕夏32%迦納牛奶巧克力"},
-            {"id":"315","barcode":"8006070001004","name":"Gavioli無酒精葡萄氣泡飲紅750m"},
-            {"id":"320","barcode":"8006070101001","name":"Gavioli無酒精葡萄氣泡飲白750m"},
-            {"id":"316","barcode":"8006070001509","name":"Gavioli無酒精蜜桃氣泡飲750ml"},
-            {"id":"1344","barcode":"8026861052561","name":"Domori克里歐羅產區焦糖海鹽巧"},
-            {"id":"1283","barcode":"8026861051939","name":"Domori72%黑巧克力裹柳橙150g"},
-            {"id":"1348","barcode":"8026861052578","name":"Domori克里歐羅產區莓果巧克力"},
-            {"id":"1342","barcode":"8026861052547","name":"Domori克里歐羅產區開心果巧克力"},
-            {"id":"1182","barcode":"8026861051519","name":"Domori100%巧克力裹開心果150g"},
-            {"id":"1380","barcode":"4711311540321","name":"巧克力方塊禮盒-黑巧克力(6入)"},
-            {"id":"1381","barcode":"4711311540338","name":"巧克力方塊禮盒-牛奶巧克力(6入)"},
-            {"id":"1383","barcode":"4711311540352","name":"巧克力方塊禮盒-覆盆莓巧克力"},
-            {"id":"1382","barcode":"4711311540345","name":"巧克力方塊禮盒-鹽之花巧克力"},
-            {"id":"1384","barcode":"4711311540369","name":"巧克力方塊禮盒-堅果脆片巧克力"},
-            {"id":"1385","barcode":"4711311540376","name":"巧克力方塊禮盒-經典5入裝"},
-            {"id":"1386","barcode":"4711311540383","name":"巧克力方塊禮盒-黑巧與牛奶(10入)"},
-            {"id":"1274","barcode":"8026861051960","name":"Domori黑巧克力裹咖啡豆150g"},
-            {"id":"709","barcode":"8026861046102","name":"Domori70%產區黑巧克力25g"},
-            {"id":"6221","barcode":"4901625021333","name":"扇屋點心起司(新)"},
-            {"id":"6205","barcode":"4540624403337","name":"草莓夾心巧克力"},
-            {"id":"6226","barcode":"4901330646197","name":"加樂比薯條杯-沙拉口味"},
-            {"id":"6166","barcode":"4901620300914","name":"日清奶油酥餅"},
-            {"id":"6142","barcode":"4902555171586","name":"不二家千層派"},
-            {"id":"6177","barcode":"4902720132640","name":"森永彈珠汽水糖"},
-            {"id":"6183","barcode":"4902777002590","name":"明治巧克力"},
-            {"id":"6214","barcode":"4902777010243","name":"明治竹筍造型巧克力"},
-            {"id":"6204","barcode":"4902777026336","name":"明治阿波羅巧克力"},
-            {"id":"6164","barcode":"4902777116501","name":"明治香菇造型巧克力"},
-            {"id":"6133","barcode":"4970694262103","name":"井村屋紅豆羊羹"},
-            {"id":"6132","barcode":"4970694262110","name":"井村屋栗子羊羹"},
-            {"id":"6134","barcode":"4970694262127","name":"井村屋抹茶羊羹"}
-        ];
+                <button onClick={() => { if(confirm('⚠️ 確定清除所有設定與商品資料？')){localStorage.clear();location.reload();} }} className="text-red-900 text-xs font-bold py-4 mt-auto">重置所有系統快取</button>
+            </div>
+          )}
+          
+          {showSummary && (
+            <div className="modal-overlay">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold text-white italic">📊 各區盤點進度</h3>
+                    <button onClick={() => setShowSummary(false)} className="text-slate-500 text-4xl">&times;</button>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-4">
+                  {LOCATIONS.map(loc => {
+                    const items = inventory.filter(i => i.location === loc);
+                    const isDone = completedLocations.includes(loc);
+                    if (items.length === 0 && !isDone) return null;
+                    return (
+                      <div key={loc} className={`border rounded-[24px] overflow-hidden ${isDone ? 'bg-emerald-900/10 border-emerald-800' : 'bg-slate-900 border-slate-800'}`}>
+                          <div className={`px-5 py-3 flex justify-between items-center ${isDone ? 'bg-emerald-900/30' : 'bg-slate-800/80'}`}>
+                            <span className={`font-bold ${isDone ? 'text-emerald-400' : 'text-yellow-500'}`}>{isDone ? '✅ ' : ''}{loc}</span>
+                            <span className="text-[10px] text-slate-400 font-bold">小計 {items.length} 項</span>
+                          </div>
+                          <div className="p-2">
+                            {items.map((i, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-xs p-3 border-b border-slate-800/50 last:border-0">
+                                <span className="text-slate-300">{i.name}</span>
+                                <span className="font-black text-yellow-500 bg-slate-950 px-2 py-1 rounded-lg">x{i.qty}</span>
+                              </div>
+                            ))}
+                          </div>
+                      </div>
+                    )
+                  })}
+                  {inventory.length === 0 && <p className="text-center text-slate-500 mt-10">尚無盤點紀錄</p>}
+                </div>
+                <button onClick={() => setShowSummary(false)} className="mt-6 w-full bg-slate-800 text-white py-4 rounded-2xl font-bold shadow-lg">返回繼續盤點</button>
+            </div>
+          )}
+        </div>
+      );
+    }
 
-        saveAndRender();
-    </script>
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
 </body>
 </html>
