@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CUPICHO PRO V6.2</title>
+  <title>CUPICHO PRO V6.3</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -56,6 +56,7 @@
       const [currentLocation, setCurrentLocation] = useState(LOCATIONS[0]);
       
       const [scannedBarcode, setScannedBarcode] = useState('');
+      const [currentItem, setCurrentItem] = useState(null); // ✅ 新增：用來記錄目前掃到的商品
       const [qty, setQty] = useState(1);
       const [feedback, setFeedback] = useState('');
       
@@ -68,7 +69,6 @@
       const [searchQuery, setSearchQuery] = useState('');
       const [newProductName, setNewProductName] = useState('');
 
-      // 用 Ref 來保存最新資料，避免 Scanner 內部的閉包抓到舊資料
       const dataRef = useRef({ masterData, manualBinds });
       useEffect(() => { dataRef.current = { masterData, manualBinds }; }, [masterData, manualBinds]);
 
@@ -82,13 +82,10 @@
         }
       }, [inventory]);
 
-      // --- 🚀 修復核心：將相機啟動獨立於 React 渲染機制之外 ---
       const startScanner = async () => {
-        // 1. 強制用原生 JS 隱藏按鈕，避免觸發 React 重新繪製
         const gate = document.getElementById('cam-gate');
         if (gate) gate.style.display = 'none';
 
-        // 2. 啟動相機
         if (!scannerRef.current) scannerRef.current = new Html5Qrcode("reader");
         
         try {
@@ -96,7 +93,6 @@
             { facingMode: "environment" },
             { fps: 30, qrbox: { width: 280, height: 160 }, aspectRatio: 1.0 },
             (decodedText) => {
-               // 閃光特效
                const f = document.getElementById('flash-overlay');
                if(f) { f.classList.add('flash-active'); setTimeout(() => f.classList.remove('flash-active'), 300); }
                if (navigator.vibrate) navigator.vibrate(80);
@@ -104,9 +100,11 @@
                const code = String(decodedText).trim();
                setScannedBarcode(code);
                
-               // 透過 Ref 確保抓到的是最新的 masterData
                const { masterData, manualBinds } = dataRef.current;
                const found = masterData.find(m => String(m.barcode) === code) || manualBinds[code];
+               
+               setCurrentItem(found || null); // ✅ 即時更新品名看板
+
                if (!found) {
                  setUnknownBarcode(code);
                  setSearchQuery('');
@@ -120,9 +118,16 @@
         }
       };
 
+      // 手動輸入條碼時，即時搜尋品名
+      const handleManualInput = (code) => {
+          setScannedBarcode(code);
+          const found = masterData.find(m => String(m.barcode) === code) || manualBinds[code];
+          setCurrentItem(found || null);
+      };
+
       const handleAddRecord = () => {
         if (!scannedBarcode || isNaN(qty)) return;
-        const item = masterData.find(m => String(m.barcode) === scannedBarcode) || manualBinds[scannedBarcode] || { id: "NEW", name: "未知商品" };
+        const item = currentItem || { id: "NEW", name: "未知商品" };
         const existingIdx = inventory.findIndex(i => i.barcode === scannedBarcode && i.location === currentLocation);
         let newInv = [...inventory];
         
@@ -139,6 +144,7 @@
         
         setInventory(newInv);
         setScannedBarcode('');
+        setCurrentItem(null); // ✅ 送出後重置看板
         setQty(1);
         setTimeout(() => setFeedback(''), 2500);
       };
@@ -176,12 +182,14 @@
 
       const bindExisting = (item) => {
         setManualBinds({ ...manualBinds, [unknownBarcode]: { id: item.id, name: item.name } });
+        setCurrentItem({ id: item.id, name: item.name }); // ✅ 綁定後立即顯示品名
         setUnknownBarcode(null);
       };
 
       const bindNewProduct = () => {
         if(!newProductName) return alert("請輸入全新的商品名稱！");
         setManualBinds({ ...manualBinds, [unknownBarcode]: { id: "NEW", name: newProductName } });
+        setCurrentItem({ id: "NEW", name: newProductName }); // ✅ 新增後立即顯示品名
         setUnknownBarcode(null);
         alert(`已成功建立新品：${newProductName}`);
       };
@@ -202,7 +210,6 @@
 
           <section className="relative w-full aspect-square bg-black overflow-hidden border-b border-slate-900 shadow-xl">
               <div id="reader" className="w-full h-full"></div>
-              {/* 改回原生 DOM 控制，防止 React 重新渲染相機區塊 */}
               <div id="cam-gate" className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950">
                   <button onClick={startScanner} className="bg-yellow-500 text-black px-12 py-5 rounded-2xl font-black text-xl shadow-[0_0_30px_rgba(234,179,8,0.2)] active:scale-95 transition-all">
                     📷 啟動掃描
@@ -212,6 +219,8 @@
 
           <section className="p-4 -mt-10 relative z-30">
               <div className="glass-card rounded-[32px] p-6 shadow-2xl">
+                  
+                  {/* 場域選擇 */}
                   <div className="flex flex-col gap-2 mb-4">
                       <div className="flex justify-between items-center ml-1">
                         <label className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">當前盤點場域</label>
@@ -225,8 +234,19 @@
                       <div className="text-[10px] text-emerald-500 font-bold px-2 h-4">{feedback}</div>
                   </div>
 
+                  {/* ✅ 修正：把品名顯示看板加回來了！ */}
+                  <div className="text-center mb-6 border-b border-slate-800 pb-4">
+                      <div className={`text-lg font-bold mb-1 ${currentItem ? 'text-white' : (scannedBarcode ? 'text-red-500' : 'text-slate-400')}`}>
+                          {currentItem ? currentItem.name : (scannedBarcode ? '⚠️ 找不到此條碼' : '等待掃描...')}
+                      </div>
+                      <div className="text-xs text-yellow-600 font-mono tracking-widest uppercase">
+                          {scannedBarcode ? `BC: ${scannedBarcode}` : 'BC: ---'}
+                      </div>
+                  </div>
+
+                  {/* 輸入與確認區塊 */}
                   <div className="grid grid-cols-4 gap-3">
-                      <input type="text" value={scannedBarcode} onChange={e => { setScannedBarcode(e.target.value); }} className="col-span-3 bg-black border border-slate-700 rounded-2xl p-4 text-white font-mono outline-none focus:border-yellow-500" placeholder="掃描或手動條碼" />
+                      <input type="text" value={scannedBarcode} onChange={e => handleManualInput(e.target.value)} className="col-span-3 bg-black border border-slate-700 rounded-2xl p-4 text-white font-mono outline-none focus:border-yellow-500" placeholder="掃描或輸入條碼" />
                       <input type="number" value={qty} onChange={e => setQty(parseInt(e.target.value)||1)} className="col-span-1 bg-black border border-slate-700 rounded-2xl p-4 text-2xl font-black text-center text-yellow-500 outline-none" />
                       <button onClick={handleAddRecord} className="col-span-4 bg-gradient-to-br from-yellow-400 to-yellow-600 text-black py-5 rounded-2xl active:scale-95 text-xl font-bold shadow-lg">確認送出</button>
                   </div>
