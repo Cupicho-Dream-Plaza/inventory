@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CUPICHO PRO V6.3</title>
+  <title>CUPICHO PRO V6.5</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -32,7 +32,17 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    const firebaseConfig = null; 
+    // ✅ 您的專屬 Cupicho Firebase 雲端金鑰
+    const firebaseConfig = {
+      apiKey: "AIzaSyA7636rgPhQNCM8V9mgG6uCxKTxpBU7v70",
+      authDomain: "cupicho-inventory.firebaseapp.com",
+      projectId: "cupicho-inventory",
+      storageBucket: "cupicho-inventory.firebasestorage.app",
+      messagingSenderId: "1079825488345",
+      appId: "1:1079825488345:web:b0446ca4f7ef83675461c8",
+      measurementId: "G-9J582TMT6L"
+    };
+
     let db = null;
     if (firebaseConfig) {
       try {
@@ -56,7 +66,7 @@
       const [currentLocation, setCurrentLocation] = useState(LOCATIONS[0]);
       
       const [scannedBarcode, setScannedBarcode] = useState('');
-      const [currentItem, setCurrentItem] = useState(null); // ✅ 新增：用來記錄目前掃到的商品
+      const [currentItem, setCurrentItem] = useState(null); 
       const [qty, setQty] = useState(1);
       const [feedback, setFeedback] = useState('');
       
@@ -72,15 +82,36 @@
       const dataRef = useRef({ masterData, manualBinds });
       useEffect(() => { dataRef.current = { masterData, manualBinds }; }, [masterData, manualBinds]);
 
+      // 🌐 雙向即時接收 (Real-time Sync) 監聽器
+      useEffect(() => {
+        if (!db) return;
+        const unsubscribe = db.collection('inventory_sessions').doc('current').onSnapshot((doc) => {
+            if (doc.exists) {
+                const cloudData = doc.data().items || [];
+                // 更新本地畫面，確保兩支手機資料同步
+                setInventory(cloudData);
+                localStorage.setItem('cup_inv', JSON.stringify(cloudData));
+            }
+        });
+        return () => unsubscribe();
+      }, []);
+
+      // 本地資料儲存
       useEffect(() => { localStorage.setItem('cup_master', JSON.stringify(masterData)); }, [masterData]);
       useEffect(() => { localStorage.setItem('cup_binds', JSON.stringify(manualBinds)); }, [manualBinds]);
       useEffect(() => { localStorage.setItem('cup_completed_locs', JSON.stringify(completedLocations)); }, [completedLocations]);
-      useEffect(() => { 
-        localStorage.setItem('cup_inv', JSON.stringify(inventory)); 
-        if (db && inventory.length > 0) {
-           db.collection('inventory_sessions').doc('current').set({ items: inventory, lastUpdated: firebase.firestore.FieldValue.serverTimestamp() }).catch(e=>console.error(e));
+      
+      // 💾 儲存並推送到雲端
+      const saveInventory = (newInv) => {
+        setInventory(newInv);
+        localStorage.setItem('cup_inv', JSON.stringify(newInv));
+        if (db) {
+            db.collection('inventory_sessions').doc('current').set({ 
+                items: newInv, 
+                lastUpdated: firebase.firestore.FieldValue.serverTimestamp() 
+            }).catch(e => console.error("雲端同步失敗", e));
         }
-      }, [inventory]);
+      };
 
       const startScanner = async () => {
         const gate = document.getElementById('cam-gate');
@@ -103,7 +134,7 @@
                const { masterData, manualBinds } = dataRef.current;
                const found = masterData.find(m => String(m.barcode) === code) || manualBinds[code];
                
-               setCurrentItem(found || null); // ✅ 即時更新品名看板
+               setCurrentItem(found || null); 
 
                if (!found) {
                  setUnknownBarcode(code);
@@ -118,7 +149,6 @@
         }
       };
 
-      // 手動輸入條碼時，即時搜尋品名
       const handleManualInput = (code) => {
           setScannedBarcode(code);
           const found = masterData.find(m => String(m.barcode) === code) || manualBinds[code];
@@ -142,9 +172,9 @@
             setFeedback(`✅ 已新增: ${item.name}`);
         }
         
-        setInventory(newInv);
+        saveInventory(newInv);
         setScannedBarcode('');
-        setCurrentItem(null); // ✅ 送出後重置看板
+        setCurrentItem(null); 
         setQty(1);
         setTimeout(() => setFeedback(''), 2500);
       };
@@ -176,20 +206,18 @@
         });
       };
 
-      const triggerFileInput = () => {
-        if (fileInputRef.current) fileInputRef.current.click();
-      };
+      const triggerFileInput = () => { if (fileInputRef.current) fileInputRef.current.click(); };
 
       const bindExisting = (item) => {
         setManualBinds({ ...manualBinds, [unknownBarcode]: { id: item.id, name: item.name } });
-        setCurrentItem({ id: item.id, name: item.name }); // ✅ 綁定後立即顯示品名
+        setCurrentItem({ id: item.id, name: item.name }); 
         setUnknownBarcode(null);
       };
 
       const bindNewProduct = () => {
         if(!newProductName) return alert("請輸入全新的商品名稱！");
         setManualBinds({ ...manualBinds, [unknownBarcode]: { id: "NEW", name: newProductName } });
-        setCurrentItem({ id: "NEW", name: newProductName }); // ✅ 新增後立即顯示品名
+        setCurrentItem({ id: "NEW", name: newProductName }); 
         setUnknownBarcode(null);
         alert(`已成功建立新品：${newProductName}`);
       };
@@ -201,8 +229,9 @@
           <header className="p-4 flex justify-between items-center bg-slate-950 border-b border-slate-900 sticky top-0 z-[100]">
               <div>
                   <h1 className="text-xl font-black text-yellow-500 italic leading-none">CUPICHO</h1>
-                  <p className="text-[9px] font-bold uppercase tracking-widest mt-1 text-slate-500">
-                    主檔: {masterData.length} 筆
+                  <p className="text-[9px] font-bold uppercase tracking-widest mt-1">
+                    {/* ✅ UI 將顯示綠色的「雲端同步中」 */}
+                    <span className={db ? "text-emerald-500" : "text-slate-500"}>{db ? '☁️ 雲端同步中' : '📱 單機模式'}</span> | 主檔: {masterData.length}
                   </p>
               </div>
               <button onClick={() => setShowAdmin(true)} className="bg-slate-900 text-slate-400 px-4 py-2 rounded-xl border border-slate-800 text-xs font-bold">⚙️ 管理</button>
@@ -220,7 +249,6 @@
           <section className="p-4 -mt-10 relative z-30">
               <div className="glass-card rounded-[32px] p-6 shadow-2xl">
                   
-                  {/* 場域選擇 */}
                   <div className="flex flex-col gap-2 mb-4">
                       <div className="flex justify-between items-center ml-1">
                         <label className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">當前盤點場域</label>
@@ -234,7 +262,6 @@
                       <div className="text-[10px] text-emerald-500 font-bold px-2 h-4">{feedback}</div>
                   </div>
 
-                  {/* ✅ 修正：把品名顯示看板加回來了！ */}
                   <div className="text-center mb-6 border-b border-slate-800 pb-4">
                       <div className={`text-lg font-bold mb-1 ${currentItem ? 'text-white' : (scannedBarcode ? 'text-red-500' : 'text-slate-400')}`}>
                           {currentItem ? currentItem.name : (scannedBarcode ? '⚠️ 找不到此條碼' : '等待掃描...')}
@@ -244,7 +271,6 @@
                       </div>
                   </div>
 
-                  {/* 輸入與確認區塊 */}
                   <div className="grid grid-cols-4 gap-3">
                       <input type="text" value={scannedBarcode} onChange={e => handleManualInput(e.target.value)} className="col-span-3 bg-black border border-slate-700 rounded-2xl p-4 text-white font-mono outline-none focus:border-yellow-500" placeholder="掃描或輸入條碼" />
                       <input type="number" value={qty} onChange={e => setQty(parseInt(e.target.value)||1)} className="col-span-1 bg-black border border-slate-700 rounded-2xl p-4 text-2xl font-black text-center text-yellow-500 outline-none" />
@@ -272,24 +298,23 @@
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="text-xl font-black text-yellow-500">x{i.qty}</div>
-                            <button onClick={() => { const newInv = [...inventory]; newInv.splice(idx, 1); setInventory(newInv); }} className="text-slate-600 text-2xl hover:text-red-500">&times;</button>
+                            <button onClick={() => { const newInv = [...inventory]; newInv.splice(idx, 1); saveInventory(newInv); }} className="text-slate-600 text-2xl hover:text-red-500">&times;</button>
                         </div>
                     </div>
                   ))}
               </div>
           </section>
 
-          <div className="fixed bottom-6 left-6 right-6 flex gap-3 z-[100]">
-              <button onClick={() => { if(confirm("確定清空盤點數據？")) setInventory([]); }} className="bg-slate-900 border border-slate-800 text-slate-500 px-6 py-4 rounded-3xl text-[10px] font-bold">RESET</button>
-              <div className="flex-1 bg-yellow-500 p-4 rounded-3xl flex justify-between items-center px-6 shadow-xl">
-                  <span className="text-black font-bold text-xs">TOTAL ITEMS</span>
+          <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-[90%] max-w-sm z-[100]">
+              <div className="bg-yellow-500 p-4 rounded-3xl flex justify-between items-center px-6 shadow-2xl border-4 border-slate-950">
+                  <span className="text-black font-bold text-xs uppercase">Total Items</span>
                   <span className="text-2xl font-black text-black leading-none">{inventory.reduce((a, b) => a + b.qty, 0)}</span>
                   <button onClick={() => {
                       let csv = "\ufeff場域,貨號,品名,條碼,數量,時間\n";
                       inventory.forEach(i => csv += `"${i.location}","${i.id}","${i.name}","${i.barcode}",${i.qty},"${i.time}"\n`);
                       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
                       a.download = `Cupicho_Inv_${new Date().toISOString().slice(0,10)}.csv`; a.click();
-                  }} className="ml-4 bg-black text-yellow-500 px-3 py-2 rounded-xl text-xs font-black shadow-md">匯出</button>
+                  }} className="ml-4 bg-black text-yellow-500 px-4 py-2 rounded-xl text-xs font-black shadow-md">匯出</button>
               </div>
           </div>
 
@@ -307,7 +332,7 @@
                 <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 mb-4 shadow-lg">
                   <h4 className="text-emerald-400 font-bold mb-3 text-sm flex items-center gap-2"><span>✨</span> 選項 A：新增為全新商品</h4>
                   <input type="text" value={newProductName} onChange={e=>setNewProductName(e.target.value)} className="w-full bg-black border border-slate-700 p-4 rounded-2xl text-white outline-none focus:border-emerald-500 mb-3" placeholder="請輸入商品名稱"/>
-                  <button onClick={bindNewProduct} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold shadow-md">✅ 確認新增並帶入</button>
+                  <button onClick={bindNewProduct} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold shadow-md">✅ 確認新增</button>
                 </div>
 
                 <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 flex-1 flex flex-col min-h-0">
@@ -333,16 +358,22 @@
                 </div>
                 
                 <div className="bg-emerald-900/20 border border-emerald-500/30 p-6 rounded-[32px] mb-6 flex flex-col items-center">
-                    <h4 className="text-emerald-500 font-bold mb-2 w-full text-left">📥 匯入新商品主檔 (CSV)</h4>
-                    <p className="text-xs text-slate-400 mb-6 w-full text-left leading-relaxed">請上傳您的 "Barcode 20260306.csv"<br/>系統將自動更新為最新的 1,825 筆商品資料。</p>
-                    
+                    <h4 className="text-emerald-500 font-bold mb-2 w-full text-left">📥 匯入新商品主檔</h4>
                     <input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleImportCSV} />
-                    <button onClick={triggerFileInput} className="bg-emerald-600 text-white w-full py-4 rounded-2xl font-bold shadow-lg active:scale-95 transition-all">
-                        📁 點擊選擇 CSV 檔案
+                    <button onClick={triggerFileInput} className="bg-emerald-600 text-white w-full py-4 rounded-2xl font-bold shadow-lg mt-2">
+                        📁 選擇 CSV 檔案
                     </button>
                 </div>
 
-                <button onClick={() => { if(confirm('⚠️ 確定清除所有設定與商品資料？')){localStorage.clear();location.reload();} }} className="text-red-900 text-xs font-bold py-4 mt-auto">重置所有系統快取</button>
+                <div className="bg-red-900/20 border border-red-500/30 p-6 rounded-[32px] mb-6">
+                    <h4 className="text-red-500 font-bold mb-2">🗑️ 清空當前盤點數據</h4>
+                    <p className="text-xs text-slate-400 mb-4">這將會清除您與雲端的所有盤點紀錄（商品主檔不會被刪除）。</p>
+                    <button onClick={() => { if(confirm("確定清空盤點數據？")) { saveInventory([]); setShowAdmin(false); } }} className="bg-red-900/50 text-red-200 border border-red-800 w-full py-4 rounded-2xl font-bold">
+                        清除所有盤點紀錄
+                    </button>
+                </div>
+
+                <button onClick={() => { if(confirm('⚠️ 確定清除所有設定與商品資料？')){localStorage.clear();location.reload();} }} className="text-slate-600 text-xs font-bold py-4 mt-auto">重置系統核心快取</button>
             </div>
           )}
           
