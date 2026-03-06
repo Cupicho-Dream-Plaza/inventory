@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CUPICHO PRO V6.1</title>
+  <title>CUPICHO PRO V6.2</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -38,7 +38,7 @@
       try {
         firebase.initializeApp(firebaseConfig);
         db = firebase.firestore();
-      } catch(e) { console.error("Firebase Init Error", e); }
+      } catch(e) { console.error("Firebase Error", e); }
     }
 
     const LOCATIONS = [
@@ -58,16 +58,19 @@
       const [scannedBarcode, setScannedBarcode] = useState('');
       const [qty, setQty] = useState(1);
       const [feedback, setFeedback] = useState('');
-      const [isScanning, setIsScanning] = useState(false);
       
       const scannerRef = useRef(null);
-      const fileInputRef = useRef(null); // 解決點擊失效的核心參照
+      const fileInputRef = useRef(null);
 
       const [showAdmin, setShowAdmin] = useState(false);
       const [showSummary, setShowSummary] = useState(false);
       const [unknownBarcode, setUnknownBarcode] = useState(null); 
       const [searchQuery, setSearchQuery] = useState('');
       const [newProductName, setNewProductName] = useState('');
+
+      // 用 Ref 來保存最新資料，避免 Scanner 內部的閉包抓到舊資料
+      const dataRef = useRef({ masterData, manualBinds });
+      useEffect(() => { dataRef.current = { masterData, manualBinds }; }, [masterData, manualBinds]);
 
       useEffect(() => { localStorage.setItem('cup_master', JSON.stringify(masterData)); }, [masterData]);
       useEffect(() => { localStorage.setItem('cup_binds', JSON.stringify(manualBinds)); }, [manualBinds]);
@@ -79,33 +82,41 @@
         }
       }, [inventory]);
 
+      // --- 🚀 修復核心：將相機啟動獨立於 React 渲染機制之外 ---
       const startScanner = async () => {
-        setIsScanning(true);
+        // 1. 強制用原生 JS 隱藏按鈕，避免觸發 React 重新繪製
+        const gate = document.getElementById('cam-gate');
+        if (gate) gate.style.display = 'none';
+
+        // 2. 啟動相機
         if (!scannerRef.current) scannerRef.current = new Html5Qrcode("reader");
+        
         try {
           await scannerRef.current.start(
             { facingMode: "environment" },
             { fps: 30, qrbox: { width: 280, height: 160 }, aspectRatio: 1.0 },
             (decodedText) => {
+               // 閃光特效
                const f = document.getElementById('flash-overlay');
-               f.classList.add('flash-active');
-               setTimeout(() => f.classList.remove('flash-active'), 300);
+               if(f) { f.classList.add('flash-active'); setTimeout(() => f.classList.remove('flash-active'), 300); }
                if (navigator.vibrate) navigator.vibrate(80);
                
                const code = String(decodedText).trim();
                setScannedBarcode(code);
-               handleLookup(code);
+               
+               // 透過 Ref 確保抓到的是最新的 masterData
+               const { masterData, manualBinds } = dataRef.current;
+               const found = masterData.find(m => String(m.barcode) === code) || manualBinds[code];
+               if (!found) {
+                 setUnknownBarcode(code);
+                 setSearchQuery('');
+                 setNewProductName('');
+               }
             }
           );
-        } catch (err) { alert("啟動相機失敗"); setIsScanning(false); }
-      };
-
-      const handleLookup = (code) => {
-        const found = masterData.find(m => String(m.barcode) === code) || manualBinds[code];
-        if (!found) {
-          setUnknownBarcode(code);
-          setSearchQuery('');
-          setNewProductName('');
+        } catch (err) { 
+            alert("啟動相機失敗：" + err); 
+            if (gate) gate.style.display = 'flex';
         }
       };
 
@@ -140,7 +151,6 @@
         }
       };
 
-      // 檔案匯入核心邏輯
       const handleImportCSV = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -155,15 +165,13 @@
                 setMasterData(parsed);
                 alert(`成功匯入 ${parsed.length} 筆最新商品資料！`);
                 setShowAdmin(false);
-                if (fileInputRef.current) fileInputRef.current.value = ""; // 重置 input 狀態
+                if (fileInputRef.current) fileInputRef.current.value = ""; 
             }
         });
       };
 
       const triggerFileInput = () => {
-        if (fileInputRef.current) {
-          fileInputRef.current.click();
-        }
+        if (fileInputRef.current) fileInputRef.current.click();
       };
 
       const bindExisting = (item) => {
@@ -180,11 +188,13 @@
 
       return (
         <div className="flex flex-col min-h-screen">
+          <div id="flash-overlay" className="fixed inset-0 pointer-events-none z-[1100]"></div>
+
           <header className="p-4 flex justify-between items-center bg-slate-950 border-b border-slate-900 sticky top-0 z-[100]">
               <div>
                   <h1 className="text-xl font-black text-yellow-500 italic leading-none">CUPICHO</h1>
                   <p className="text-[9px] font-bold uppercase tracking-widest mt-1 text-slate-500">
-                    主檔: {masterData.length}
+                    主檔: {masterData.length} 筆
                   </p>
               </div>
               <button onClick={() => setShowAdmin(true)} className="bg-slate-900 text-slate-400 px-4 py-2 rounded-xl border border-slate-800 text-xs font-bold">⚙️ 管理</button>
@@ -192,13 +202,12 @@
 
           <section className="relative w-full aspect-square bg-black overflow-hidden border-b border-slate-900 shadow-xl">
               <div id="reader" className="w-full h-full"></div>
-              {!isScanning && (
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950">
-                    <button onClick={startScanner} className="bg-yellow-500 text-black px-12 py-5 rounded-2xl font-black text-xl shadow-[0_0_30px_rgba(234,179,8,0.2)] active:scale-95 transition-all">
-                      📷 啟動極速掃描
-                    </button>
-                </div>
-              )}
+              {/* 改回原生 DOM 控制，防止 React 重新渲染相機區塊 */}
+              <div id="cam-gate" className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950">
+                  <button onClick={startScanner} className="bg-yellow-500 text-black px-12 py-5 rounded-2xl font-black text-xl shadow-[0_0_30px_rgba(234,179,8,0.2)] active:scale-95 transition-all">
+                    📷 啟動掃描
+                  </button>
+              </div>
           </section>
 
           <section className="p-4 -mt-10 relative z-30">
@@ -217,7 +226,7 @@
                   </div>
 
                   <div className="grid grid-cols-4 gap-3">
-                      <input type="text" value={scannedBarcode} onChange={e => { setScannedBarcode(e.target.value); handleLookup(e.target.value); }} className="col-span-3 bg-black border border-slate-700 rounded-2xl p-4 text-white font-mono outline-none focus:border-yellow-500" placeholder="掃描或手動條碼" />
+                      <input type="text" value={scannedBarcode} onChange={e => { setScannedBarcode(e.target.value); }} className="col-span-3 bg-black border border-slate-700 rounded-2xl p-4 text-white font-mono outline-none focus:border-yellow-500" placeholder="掃描或手動條碼" />
                       <input type="number" value={qty} onChange={e => setQty(parseInt(e.target.value)||1)} className="col-span-1 bg-black border border-slate-700 rounded-2xl p-4 text-2xl font-black text-center text-yellow-500 outline-none" />
                       <button onClick={handleAddRecord} className="col-span-4 bg-gradient-to-br from-yellow-400 to-yellow-600 text-black py-5 rounded-2xl active:scale-95 text-xl font-bold shadow-lg">確認送出</button>
                   </div>
@@ -276,13 +285,13 @@
                 </div>
                 
                 <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 mb-4 shadow-lg">
-                  <h4 className="text-emerald-400 font-bold mb-3 text-sm flex items-center gap-2"><span>✨</span> 選項 A：直接新增為全新商品</h4>
+                  <h4 className="text-emerald-400 font-bold mb-3 text-sm flex items-center gap-2"><span>✨</span> 選項 A：新增為全新商品</h4>
                   <input type="text" value={newProductName} onChange={e=>setNewProductName(e.target.value)} className="w-full bg-black border border-slate-700 p-4 rounded-2xl text-white outline-none focus:border-emerald-500 mb-3" placeholder="請輸入商品名稱"/>
                   <button onClick={bindNewProduct} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold shadow-md">✅ 確認新增並帶入</button>
                 </div>
 
                 <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 flex-1 flex flex-col min-h-0">
-                  <h4 className="text-blue-400 font-bold mb-3 text-sm flex items-center gap-2"><span>🔍</span> 選項 B：尋找現有商品進行綁定</h4>
+                  <h4 className="text-blue-400 font-bold mb-3 text-sm flex items-center gap-2"><span>🔍</span> 選項 B：尋找現有商品綁定</h4>
                   <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} className="w-full bg-black border border-slate-700 p-4 rounded-2xl text-white outline-none focus:border-blue-500 mb-3" placeholder="搜尋主檔名稱..."/>
                   <div className="flex-1 overflow-y-auto space-y-2">
                     {searchQuery.length > 0 && masterData.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 10).map(item => (
@@ -307,7 +316,6 @@
                     <h4 className="text-emerald-500 font-bold mb-2 w-full text-left">📥 匯入新商品主檔 (CSV)</h4>
                     <p className="text-xs text-slate-400 mb-6 w-full text-left leading-relaxed">請上傳您的 "Barcode 20260306.csv"<br/>系統將自動更新為最新的 1,825 筆商品資料。</p>
                     
-                    {/* 使用 React useRef 確保點擊絕對有效 */}
                     <input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleImportCSV} />
                     <button onClick={triggerFileInput} className="bg-emerald-600 text-white w-full py-4 rounded-2xl font-bold shadow-lg active:scale-95 transition-all">
                         📁 點擊選擇 CSV 檔案
